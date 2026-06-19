@@ -164,7 +164,7 @@ export default function DashboardPage() {
                   <span className="text-white font-bold text-xl">B</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900">
-                  BookWise
+                  BookStore
                 </span>
               </Link>
               <div className="hidden md:flex items-center space-x-6">
