@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import toast from "react-hot-toast";
 
 interface Category {
@@ -8,18 +8,35 @@ interface Category {
   name: string;
 }
 
-export default function AddNewBookPage() {
+interface Book {
+  id: number;
+  title: string;
+  author: string;
+  categoryId: number;
+  description: string;
+  publicationYear: number | null;
+  isbn: string | null;
+  coverImageUrl: string | null;
+  originalPdfUrl: string | null;
+  isFeatured: boolean;
+  isPublished: boolean;
+  summaryGenerated: boolean;
+  audioGenerated: boolean;
+}
+
+export default function EditBookPage() {
   const router = useRouter();
+  const params = useParams();
+  const bookId = params.id as string;
+
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
-  const [coverImagePreview, setCoverImagePreview] = useState<string>("");
+  const [book, setBook] = useState<Book | null>(null);
+
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [summaryProgress, setSummaryProgress] = useState("");
   const [audioProgress, setAudioProgress] = useState("");
-  const [bookId, setBookId] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -28,28 +45,47 @@ export default function AddNewBookPage() {
     description: "",
     publicationYear: "",
     isbn: "",
-    tags: "",
     isFeatured: false,
     isPublished: false,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  /// Fetch categories
+  /// Fetch Book and Categories
   useEffect(() => {
-    async function fetchCategories() {
+    async function fetchData() {
       try {
-        const response = await fetch("/api/admin/categories");
-        if (response.ok) {
-          const data = await response.json();
-          setCategories(data);
+        // Fetch book
+
+        const bookResponse = await fetch(`/api/admin/books/${bookId}`);
+        if (bookResponse.ok) {
+          const bookData = await bookResponse.json();
+          setBook(bookData);
+          setFormData({
+            title: bookData.title,
+            author: bookData.author,
+            categoryId: bookData.categoryId.toString(),
+            description: bookData.description,
+            publicationYear: bookData.publicationYear?.toString() || "",
+            isbn: bookData.isbn || "",
+            isFeatured: bookData.isFeatured,
+            isPublished: bookData.isPublished,
+          });
         }
+
+        // Fetch Categoeies
+        const categoriesResponse = await fetch("/api/admin/categories");
+        if (categoriesResponse.ok) {
+          const categoriesData = await categoriesResponse.json();
+          setCategories(categoriesData);
+        }
+        setLoading(false);
       } catch (error) {
-        console.error("Failed to fetch categories", error);
+        console.error("Failed to fetch data:", error);
       }
     }
-    fetchCategories();
-  }, []);
+    fetchData();
+  }, [bookId]);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -69,225 +105,106 @@ export default function AddNewBookPage() {
     }
   };
 
-  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setCoverImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCoverImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPdfFile(file);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrors({});
 
     try {
-      /// Upload Files first
-      let coverImageUrl = "";
-      let pdfUrl = "";
-
-      if (coverImageFile) {
-        const formData = new FormData();
-        formData.append("file", coverImageFile);
-        formData.append("type", "cover");
-
-        const uploadResponse = await fetch("/api/admin/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (uploadResponse.ok) {
-          const data = await uploadResponse.json();
-          coverImageUrl = data.url;
-        }
-      }
-
-      if (pdfFile) {
-        const formData = new FormData();
-        formData.append("file", pdfFile);
-        formData.append("type", "pdf");
-
-        const uploadResponse = await fetch("/api/admin/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (uploadResponse.ok) {
-          const data = await uploadResponse.json();
-          pdfUrl = data.url;
-        }
-      }
-
-      // Create book
-
-      const response = await fetch("/api/admin/books", {
-        method: "POST",
+      const response = await fetch(`/api/admin/books/${bookId}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: formData.title,
-          author: formData.author,
+          ...formData,
           categoryId: parseInt(formData.categoryId),
-          description: formData.description,
           publicationYear: formData.publicationYear
             ? parseInt(formData.publicationYear)
             : null,
-          isbn: formData.isbn || null,
-          tags: formData.tags || null,
-          coverImageUrl: coverImageUrl || null,
-          pdfUrl: pdfUrl || null,
-          isFeatured: formData.isFeatured,
-          isPublished: formData.isPublished,
         }),
       });
 
       const data = await response.json();
+
       if (!response.ok) {
         if (data.errors) {
           setErrors(data.errors);
         } else {
-          setErrors({ general: data.error || "Failed to create book" });
+          setErrors({ general: data.error || "Filed to update book" });
         }
         setLoading(false);
         return;
       }
-      // Save book id for summary and audio generation
-      setBookId(data.id);
-      setLoading(false);
-
-      // Show success messsage
-      toast.success(
-        "Book created successfully! You can now generate summary and audio"
-      );
+      toast.success("Book updated successfully");
+      router.push("/admin/books");
     } catch (error) {
-      setErrors({ general: "Failed to create book" });
-      setLoading(false);
+      setErrors({ general: "An error occurred while updating the book" });
     }
   };
 
-  /// Function for generate book summary by chatgpt api
+  /// Function for generate book summary by chatgpt/gemini api
   const handleGenerateSummary = async () => {
-    if (!bookId) {
-      toast.error("Please save the book first before generating summary");
-    }
-
     setGeneratingSummary(true);
     setSummaryProgress("Extracting text from PDF...");
 
     try {
-      const response = await fetch("/api/admin/books/generate-summary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ bookId }),
-      });
+        const response = await fetch("/api/admin/books/generate-summary", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ bookId: parseInt(bookId) }),
+        });
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data:")) {
-              const data = JSON.parse(line.slice(6));
-              setSummaryProgress(data.message);
-
-              if (data.completed) {
-                setGeneratingSummary(false);
-                toast.success("Summary generated successfully");
-                // Refreah book data
-                window.location.reload();
-                break;
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      setGeneratingSummary(false);
-      setSummaryProgress("");
-      toast.error("Failed to generate summary");
-    }
-  };
-
-  /// Function for generate book summary Audio by chatgpt api
-
-  const handleGenerateAudio = async () => {
-    if (!bookId) {
-      toast.error("Please save the book first before generating summary");
-    }
-
-    setGeneratingAudio(true);
-    setAudioProgress("Generating audio from summary...");
-
-    try {
-      const response = await fetch("/api/admin/books/generate-audio", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ bookId }),
-      });
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        if (reader) {
+          while(true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n");
 
           for (const line of lines) {
-            if (line.startsWith("data:")) {
-              const data = JSON.parse(line.slice(6));
-              setAudioProgress(data.message);
+                  if (line.startsWith("data:")) {
+                  const data = JSON.parse(line.slice(6));
+                  setSummaryProgress(data.message);
 
-              if (data.completed) {
-                setGeneratingAudio(false);
-                toast.success("Audio generated successfully");
-                // Refreah book data
-                window.location.reload();
-                break;
+                  if (data.completed) {
+                      setGeneratingSummary(false);
+                      toast.success("Summary generated successfully");
+                      // Refreah book data
+                      window.location.reload();
+                      break;
+                  }
+                  }                    
               }
-            }
           }
+      }            
+  } catch (error) {
+          setGeneratingSummary(false);
+          setSummaryProgress("");
+          toast.error("Failed to generate summary");
         }
-      }
-    } catch (error) {
-      setGeneratingAudio(false);
-      setAudioProgress("");
-      toast.error("Failed to generate Audio");
-    }
   };
+
+  if (!book) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl">Book not found</div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Add New Book</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Edit Book</h1>
         <p className="text-gray-600 mt-2">
-          Create a new book entry with AI-generated summary and audio
+          Update Book details and manage content
         </p>
       </div>
 
@@ -372,50 +289,11 @@ export default function AddNewBookPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Upload Cover Image *
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCoverImageChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  />
-                  {coverImagePreview && (
-                    <img
-                      src={coverImagePreview}
-                      alt="Cover preview"
-                      className="mt-2 w-32 h-48 object-cover rounded-lg border"
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Upload PDF File *
-                  </label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                  />
-                  {pdfFile && (
-                    <p className="text-sm text-green-600 mt-2">
-                      ✓ {pdfFile.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Publication Year
                   </label>
-
                   <input
                     type="number"
                     name="publicationYear"
@@ -441,22 +319,20 @@ export default function AddNewBookPage() {
                     placeholder="978-0-123456-78-9"
                   />
                 </div>
+              </div>
 
+              {book?.coverImageUrl && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags
+                    Current Cover Image
                   </label>
-
-                  <input
-                    type="text"
-                    name="tags"
-                    value={formData.tags}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                    placeholder="business, finance"
+                  <img
+                    src={book.coverImageUrl}
+                    alt={book.title}
+                    className="w-32 h-48 object-cover rounded-lg border"
                   />
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -523,41 +399,48 @@ export default function AddNewBookPage() {
               className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50"
               disabled={loading}
             >
-              {loading ? "Creating..." : "Create Book"}
+              {loading ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>
 
         {/* AI Summary Generation */}
 
-        {bookId && (
-          <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              🤖 AI Summary Generation
-            </h2>
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                Generate AI-powered summary using ChatGPT
-              </p>
-
-              {summaryProgress && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">{summaryProgress}</p>
-                </div>
-              )}
+        <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            🤖 AI Summary Generation
+          </h2>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600">
+                  {book.summaryGenerated
+                    ? "Summary Already Generated"
+                    : "Generate AI-Powered summary from PDF"}
+                </p>
+              </div>
 
               <button
-                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50"
                 onClick={handleGenerateSummary}
                 disabled={generatingSummary}
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50"
               >
                 {generatingSummary
                   ? "Generating..."
-                  : "Generate Summary with ChatGPT"}
+                  : book.summaryGenerated
+                  ? "Regenerating Summary"
+                  : "Generate Summary"}
               </button>
             </div>
+
+
+            {summaryProgress && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">{summaryProgress}</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Audio Generation */}
 
@@ -565,7 +448,6 @@ export default function AddNewBookPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">
             🎧 Audio Generation
           </h2>
-
           <div className="space-y-4">
             <p className="text-gray-600">Generate audio using Text-to-Speech</p>
 
