@@ -225,6 +225,52 @@ export default function BookDetailsPage({
     }
   };
 
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user) {
+      toast.error("Please log in to submit a review");
+      router.push("/login");
+    }
+    /// Validation comment length
+    if (reviewData.comment.trim().length < 10) {
+      toast.error("Your review must be at least 10 characters long");
+      return;
+    }
+
+    if (reviewData.comment.trim().length > 1000) {
+      toast.error(
+        "Your review is too long. Please keep in under 1000 characters"
+      );
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/user/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookId: book?.id,
+          rating: reviewData.rating,
+          comment: reviewData.comment.trim(),
+        }),
+      });
+      if (response.ok) {
+        toast.success(
+          "Review Submitted! It will aappear after admin approval."
+        );
+        setShowReviewForm(false);
+        setReviewData({ rating: 5, comment: "" });
+        fetchBook();
+      } else {
+        const error = await response.json();
+        toast.error(error.error || "Failed to submit review");
+      }
+    } catch (error) {
+      console.error("Failed to submit review", error);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       const response = await fetch("/api/auth/signout", {
@@ -236,6 +282,30 @@ export default function BookDetailsPage({
     } catch (error) {
       console.error("Sign out error", error);
     }
+  };
+
+  const renderStars = (
+    rating: number,
+    interactive = false,
+    onRate?: (rating: number) => void
+  ) => {
+    return (
+      <div className="flex items-center space-x-1">
+        {[...Array(5)].map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => interactive && onRate && onRate(i + 1)}
+            disabled={!interactive}
+            className={`${
+              interactive ? "cursor-pointer hover:scale-110" : ""
+            } ${i < rating ? "text-yellow-400" : "text-gray-300"} text-2xl`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+    );
   };
 
   if (loading || !book) {
@@ -361,7 +431,10 @@ export default function BookDetailsPage({
               <p className="text-lg text-gray-600 mb-4">by {book.author}</p>
 
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-600">reviews reviews</span>
+                {renderStars(Math.round(book.averageRating))}
+                <span className="text-sm text-gray-600">
+                  {book._count.reviews} reviews
+                </span>
               </div>
 
               <div className="space-y-3">
@@ -572,71 +645,119 @@ export default function BookDetailsPage({
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Reviews</h2>
 
-                <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
-                  Write a Review
-                </button>
+                {user && (
+                  <button
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700"
+                    onClick={() => setShowReviewForm(!showReviewForm)}
+                  >
+                    Write a Review
+                  </button>
+                )}
               </div>
 
-              <form className="mb-8 p-6 bg-gray-50 rounded-xl">
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Your Rating
-                  </label>
-                  ddd
-                </div>
-
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-semibold text-gray-700">
-                      Your Review
+              {showReviewForm && (
+                <form
+                  onSubmit={handleSubmitReview}
+                  className="mb-8 p-6 bg-gray-50 rounded-xl"
+                >
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Your Rating
                     </label>
-                    <span className={`text-xs text-red-600`}>(min: 10)</span>
+                    {renderStars(reviewData.rating, true, (rating) =>
+                      setReviewData({ ...reviewData, rating })
+                    )}
                   </div>
-                  <textarea
-                    required
-                    rows={4}
-                    maxLength={1000}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Share your thoughts about this book (minimum 10 characters)..."
-                  />
-                </div>
 
-                <div className="flex space-x-3">
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700"
-                  >
-                    Submit Review
-                  </button>
-                  <button
-                    type="button"
-                    className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-semibold text-gray-700">
+                        Your Review
+                      </label>
+                      <span
+                        className={`text-xs ${
+                          reviewData.comment.length < 10
+                            ? "text-red-600"
+                            : reviewData.comment.length > 1000
+                            ? "text-red-600"
+                            : "text-gray-500"
+                        } `}
+                      >
+                        {reviewData.comment.length}/1000 Characters
+                        {reviewData.comment.length < 10 && "(min: 10)"}
+                      </span>
+                    </div>
+                    <textarea
+                      value={reviewData.comment}
+                      onChange={(e) =>
+                        setReviewData({
+                          ...reviewData,
+                          comment: e.target.value,
+                        })
+                      }
+                      required
+                      rows={4}
+                      maxLength={1000}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Share your thoughts about this book (minimum 10 characters)..."
+                    />
+                  </div>
 
-              <p className="text-gray-600 text-center py-8">
-                No reviews yet. Be the first to review this book!
-              </p>
+                  <div className="flex space-x-3">
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700"
+                    >
+                      Submit Review
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewForm(false)}
+                      className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
 
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-6 last:border-0">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-semibold text-gray-900">fullName</p>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold">
-                          ✓ Verified Purchase
+              {book.reviews.length === 0 ? (
+                <p className="text-gray-600 text-center py-8">
+                  No reviews yet. Be the first to review this book!
+                </p>
+              ) : (
+                <div className="space-y-6">
+                  {book.reviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="border-b border-gray-200 pb-6 last:border-0"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {review.user.fullName}
+                          </p>
+                          <div className="flex items-center space-x-2 mt-1">
+                            {renderStars(review.rating)}
+                            {review.isVerifiedPurchase && (
+                              <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full font-semibold">
+                                ✓ Verified Purchase
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          {" "}
+                          {new Date(review.createdAt).toLocaleDateString()}
                         </span>
                       </div>
+                      <p className="text-gray-700 leading-relaxed">
+                        {review.reviewText}
+                      </p>
                     </div>
-                    <span className="text-sm text-gray-500">createdAt</span>
-                  </div>
-                  <p className="text-gray-700 leading-relaxed">reviewText</p>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
