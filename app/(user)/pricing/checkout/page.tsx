@@ -106,7 +106,7 @@ export default function CheckoutPage() {
       const uploadData = await uploadResponse.json();
       setUploading(false);
 
-      /// Cerate subscription order data
+      /// Create subscription order data
       const orderResponse = await fetch("/api/subscription/orders", {
         method: "POST",
         headers: {

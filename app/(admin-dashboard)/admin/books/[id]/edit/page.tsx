@@ -149,46 +149,93 @@ export default function EditBookPage() {
     setSummaryProgress("Extracting text from PDF...");
 
     try {
-        const response = await fetch("/api/admin/books/generate-summary", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ bookId: parseInt(bookId) }),
-        });
+      const response = await fetch("/api/admin/books/generate-summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookId: parseInt(bookId) }),
+      });
 
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
 
-        if (reader) {
-          while(true) {
-              const { done, value } = await reader.read();
-              if (done) break;
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
           const chunk = decoder.decode(value);
           const lines = chunk.split("\n");
 
           for (const line of lines) {
-                  if (line.startsWith("data:")) {
-                  const data = JSON.parse(line.slice(6));
-                  setSummaryProgress(data.message);
+            if (line.startsWith("data:")) {
+              const data = JSON.parse(line.slice(6));
+              setSummaryProgress(data.message);
 
-                  if (data.completed) {
-                      setGeneratingSummary(false);
-                      toast.success("Summary generated successfully");
-                      // Refreah book data
-                      window.location.reload();
-                      break;
-                  }
-                  }                    
+              if (data.completed) {
+                setGeneratingSummary(false);
+                toast.success("Summary generated successfully");
+                // Refreah book data
+                window.location.reload();
+                break;
               }
+            }
           }
-      }            
-  } catch (error) {
-          setGeneratingSummary(false);
-          setSummaryProgress("");
-          toast.error("Failed to generate summary");
         }
+      }
+    } catch (error) {
+      setGeneratingSummary(false);
+      setSummaryProgress("");
+      toast.error("Failed to generate summary");
+    }
+  };
+
+  const handleGenerateAudio = async () => {
+    setGeneratingAudio(true);
+    setAudioProgress("Generating audio from summary...");
+
+    try {
+      const response = await fetch("/api/admin/books/generate-audio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookId: parseInt(bookId) }),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data:")) {
+              const data = JSON.parse(line.slice(6));
+              setAudioProgress(data.message);
+
+              if (data.completed) {
+                setGeneratingAudio(false);
+                toast.success("Audio generated successfully");
+                // Refreah book data
+                window.location.reload();
+                break;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      setGeneratingAudio(false);
+      setAudioProgress("");
+      toast.error("Failed to generate Audio");
+    }
   };
 
   if (!book) {
@@ -433,7 +480,6 @@ export default function EditBookPage() {
               </button>
             </div>
 
-
             {summaryProgress && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">{summaryProgress}</p>
@@ -449,15 +495,35 @@ export default function EditBookPage() {
             🎧 Audio Generation
           </h2>
           <div className="space-y-4">
-            <p className="text-gray-600">Generate audio using Text-to-Speech</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600">
+                  {book.audioGenerated
+                    ? "Audio Alrady generated"
+                    : book.summaryGenerated
+                    ? "Generate audio from summary"
+                    : " Please generate summary first"}
+                </p>
+              </div>
 
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <p className="text-sm text-purple-800">audioProgress</p>
+              <button
+                onClick={handleGenerateAudio}
+                disabled={generatingAudio || !book.summaryGenerated}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50"
+              >
+                {generatingAudio
+                  ? "Generating..."
+                  : book.audioGenerated
+                  ? "Regenerate Audio"
+                  : "🎧 Generate Audio"}
+              </button>
             </div>
 
-            <button className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50">
-              🎧 Generate Audio
-            </button>
+            {audioProgress && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <p className="text-sm text-purple-800">{audioProgress}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

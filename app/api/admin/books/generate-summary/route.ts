@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { readFile } from "fs/promises";
 import { join } from "path";
+import { DOMMatrix as CanvasDOMMatrix } from 'canvas';
+import pdf from "pdf-extraction";
+
 
 const openRouterAi = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
-    /// Create reaable stream for Server-send events.
+    /// Create readble stream for Server-send events.
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -53,14 +56,17 @@ export async function POST(request: NextRequest) {
           if (book.originalPdfUrl) {
             sendMessage("Extracting text from PDF...");
             try {
-              const pdfParse = require("pdf-parse");
+             // global.DOMMatrix = DOMMatrix;
+              (global as any).DOMMatrix = CanvasDOMMatrix;
+             
               const pdfPath = join(
                 process.cwd(),
                 "public",
                 book.originalPdfUrl
               );
               const dataBuffer = await readFile(pdfPath);
-              const pdfData = await pdfParse(dataBuffer);
+              const pdfData = await pdf(dataBuffer);
+
               pdfText = pdfData.text;
 
               // Limit to first 15000 characters to avoid token limits
@@ -83,7 +89,8 @@ export async function POST(request: NextRequest) {
           // GENERATE MAIN SUMMARY FOR THE BOOK
 
           const summaryCompletion = await openRouterAi.chat.completions.create({
-            model: "openai/gpt-oss-20b:free",
+          //  model: "openrouter/free",
+          model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
                 role: "system",
@@ -118,7 +125,8 @@ export async function POST(request: NextRequest) {
           // Generate table of contents
 
           const tocCompletion = await openRouterAi.chat.completions.create({
-            model: "openai/gpt-oss-20b:free",
+            // model: "openrouter/free",
+             model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
                 role: "system",
@@ -169,13 +177,14 @@ export async function POST(request: NextRequest) {
           for (let i = 0; i < tableOfContents.length; i++) {
             const chapter = tableOfContents[i];
             sendMessage(
-              `Generating professional summary for Chapter ${chapter.chapterNumber}: ${chapter.titie}...`
+              `Generating professional summary for Chapter ${chapter.chapterNumber}: ${chapter.title}...`
             );
 
             try {
               const chapterSummaryCompletion =
                 await openRouterAi.chat.completions.create({
-                  model: "openai/gpt-oss-20b:free",
+                  // model: "openrouter/free",
+                   model: "nex-agi/nex-n2.5-pro:free",
                   messages: [
                     {
                       role: "system",
@@ -184,7 +193,7 @@ export async function POST(request: NextRequest) {
                     },
                     {
                       role: "user",
-                      content: `Based on the following book content, create a detailed 150-word professional summary for this specific chapter:
+                      content: `Based on the following book content, create a detailed 150-words professional summary for this specific chapter:
 
 Book: "${book.title}" by ${book.author}
 Chapter ${chapter.chapterNumber}: ${chapter.title}
@@ -192,17 +201,17 @@ Chapter ${chapter.chapterNumber}: ${chapter.title}
 Book Content:
 ${pdfText}
 
-Create a comprehensive, professional summary of exactly 150 words that:
+Create a comprehensive, professional summary of exactly 120-180 words that:
 1. Captures the main ideas and key concepts of this chapter
 2. Highlights actionable insights and takeaways
 3. Uses engaging, professional language
 4. Provides value to readers looking to understand this chapter's core message
 
-Return ONLY the 150-word summary text, nothing else.`,
+Return ONLY the 120-180 word summary text, nothing else.`,
                     },
                   ],
                   temperature: 0.7,
-                  max_tokens: 300,
+                  max_tokens: 500,
                 });
 
               const detailedSummary =
@@ -231,15 +240,20 @@ Return ONLY the 150-word summary text, nothing else.`,
 
           sendMessage("Saving summary to database...");
 
-          // save to database
-
-          await prisma.bookSummary.create({
-            data: {
+          // save to database with upsert to check first if data exist or not 
+          await prisma.bookSummary.upsert({
+            where: { bookId: book.id },
+            update: {
+              mainSummary: summaryText,
+              tableOfContents: tableOfContents,
+            },
+            create: {
               bookId: book.id,
               mainSummary: summaryText,
               tableOfContents: tableOfContents,
             },
           });
+          
 
           // Create chapters with detials in book chapter table
           for (const chapter of chaptersWithSummaries) {

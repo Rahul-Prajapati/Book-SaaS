@@ -99,6 +99,7 @@ model Book {
   averageRating        Decimal  @default(0.00) @db.Decimal(3, 2) @map("average_rating")
   totalReviews         Int      @default(0) @map("total_reviews")
   viewCount            Int      @default(0) @map("view_count")
+  
   isFeatured           Boolean  @default(false) @map("is_featured")
   isPublished          Boolean  @default(false) @map("is_published")
   summaryGenerated     Boolean  @default(false) @map("summary_generated")

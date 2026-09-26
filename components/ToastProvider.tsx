@@ -52,6 +52,7 @@ export default function ToastProvider(){
                               color: "#fff",
                          }
                     }
+
                }}
           />
      )

@@ -97,6 +97,9 @@ export default function BookDetailsPage({
       }
     } catch (error) {
       console.error("Failed to fetch user", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(errorMessage);
+
     }
   }
 
@@ -116,6 +119,8 @@ export default function BookDetailsPage({
       }
     } catch (error) {
       console.error("Failed to fetch book", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -143,17 +148,43 @@ export default function BookDetailsPage({
       fetchBook();
     } catch (error) {
       console.error("Failed to toggle favorites:", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(errorMessage);
     }
   };
 
-  const handlePlayPause = () => {
+  const FREE_AUDIO_LIMIT = 10;
+
+  const hasReachedFreeLimitRef = useRef(false);
+
+  const handlePlayPause = async () => {
     if (!audioRef.current) return;
+
     if (isPlaying) {
       audioRef.current.pause();
-    } else {
-      audioRef.current.play();
+      setIsPlaying(false);
+      return;
     }
-    setIsPlaying(!isPlaying);
+
+    if (!isPremiumUser && audioRef.current.currentTime >= FREE_AUDIO_LIMIT) {
+      audioRef.current.currentTime = FREE_AUDIO_LIMIT;
+      setCurrentTime(FREE_AUDIO_LIMIT);
+
+      toast(
+        "1 Free users can listen to only 10 seconds. Upgrade to Premium for full access."
+      );
+
+      return;
+    }
+
+    try {
+      await audioRef.current.play();
+      setIsPlaying(true);
+    } catch (error) {
+      console.error("Audio playback failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(errorMessage);
+    }
   };
 
   const handleChapterChange = (index: number) => {
@@ -163,6 +194,7 @@ export default function BookDetailsPage({
 
     // Reset audio when chapter changes
     if (audioRef.current) {
+      audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current.load();
     }
@@ -186,6 +218,31 @@ export default function BookDetailsPage({
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
     }
+
+    if (!audioRef.current) return;
+
+    const currentTime = audioRef.current.currentTime;
+
+    if (!isPremiumUser && currentTime >= FREE_AUDIO_LIMIT) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = FREE_AUDIO_LIMIT;
+
+      setCurrentTime(FREE_AUDIO_LIMIT);
+      setIsPlaying(false);
+
+      if(!hasReachedFreeLimitRef.current){
+        hasReachedFreeLimitRef.current = true;
+
+        toast(
+          " 2 Free users can listen to only 10 seconds. Upgrade to Premium for full access."
+        );
+
+        return;
+
+      } 
+    }
+
+    setCurrentTime(currentTime);
   };
 
   const handleLoadMetadata = () => {
@@ -195,10 +252,24 @@ export default function BookDetailsPage({
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
+
+    let time = parseFloat(e.target.value);
+
+    if (!isPremiumUser && time > FREE_AUDIO_LIMIT) {
+      time = FREE_AUDIO_LIMIT;
+
+      toast(" 3 Free users can listen to only 10 seconds.");
+      return;
+    }
+
     if (audioRef.current) {
       audioRef.current.currentTime = time;
       setCurrentTime(time);
+
+      if (!isPremiumUser && time >= FREE_AUDIO_LIMIT) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
     }
   };
 
@@ -268,6 +339,8 @@ export default function BookDetailsPage({
       }
     } catch (error) {
       console.error("Failed to submit review", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(errorMessage);
     }
   };
 
@@ -281,6 +354,8 @@ export default function BookDetailsPage({
       }
     } catch (error) {
       console.error("Sign out error", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(errorMessage);
     }
   };
 
@@ -334,7 +409,7 @@ export default function BookDetailsPage({
                   <span className="text-white font-bold text-xl">B</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900">
-                  BookWise
+                  BookStore
                 </span>
               </Link>
               <div className="hidden md:flex items-center space-x-6">
@@ -553,14 +628,28 @@ export default function BookDetailsPage({
                     <input
                       type="range"
                       min="0"
-                      max={duration || 0}
-                      value={currentTime}
+                      max={
+                        isPremiumUser
+                          ? duration
+                          : Math.min(duration, FREE_AUDIO_LIMIT)
+                      }
+                      value={Math.min(
+                        currentTime,
+                        isPremiumUser ? duration : FREE_AUDIO_LIMIT
+                      )}
                       onChange={handleSeek}
                       className="w-full h-2 bg-white/30 rounded-lg appearance-none cursor-pointer"
                     />
                     <div className="flex justify-between text-sm text-white/80">
                       <span>{formatTime(currentTime)}</span>
-                      <span>{formatTime(duration)}</span>
+                      
+                      <span>
+                        {formatTime(
+                          isPremiumUser
+                            ? duration
+                            : Math.min(duration, FREE_AUDIO_LIMIT)
+                        )}
+                      </span>
                     </div>
                   </div>
 

@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
     }
     const body = await request.json();
 
+    console.log("Body : ", body);
+
     /// Validate request body
     const validation = orderSchema.safeParse(body);
     if (!validation.success) {
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
         }
       });
       return NextResponse.json(
-        { error: "Vlaidation filed", errors },
+        { error: "Validation failed", errors },
         { status: 400 }
       );
     }
