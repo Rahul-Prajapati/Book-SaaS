@@ -1,6 +1,6 @@
 import { DefaultSession } from "next-auth";
-import { UserRole, SubscriptionTier  } from "@/src/generated/enums";
-// import { UserRole, SubscriptionTier } from "@prisma/client";
+// import { UserRole, SubscriptionTier  } from "@/src/generated/enums";
+ import { UserRole, SubscriptionTier } from "@prisma/client";
 
 
 declare module "next-auth" {
