@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db/prisma";
 import { UserRole, SubscriptionTier } from "@prisma/client";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-    adapter: PrismaAdapter(prisma), 
+    adapter: PrismaAdapter(prisma) as any, 
     session: {
         strategy: "jwt",
     },
@@ -57,6 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
            },
         }),
     ],
+    trustHost: true, 
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
