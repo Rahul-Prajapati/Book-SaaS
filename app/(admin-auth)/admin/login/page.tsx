@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { toast } from "react-hot-toast";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -31,10 +32,12 @@ export default function AdminLoginPage() {
       }
 
       // Redireact to admin dashboard after successfully login
+      toast.success("Login Successful");
       router.push("/admin/dashboard");
       router.refresh();
     } catch (err: any) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }

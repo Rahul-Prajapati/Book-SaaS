@@ -157,14 +157,28 @@ export async function POST(request: NextRequest) {
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
-                message: "Compalted",
+                message: "Completed",
                 completed: true,
               })}\n\n`
             )
           );
           controller.close();
         } catch (error) {
-          console.error("Error Generating audio", error);
+          console.error("Error Generating audio!!", error);
+          // return new Response(error instanceof Error ? error.message : String(error), { status: 500 });
+          const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                error: errorMessage,
+              })}\n\n`
+            )
+          );
+        
+          controller.close();
+      
         }
       },
     });
@@ -178,5 +192,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error Generating audio", error);
+    return new Response(error instanceof Error ? error.message : String(error), { status: 500 });
   }
 }

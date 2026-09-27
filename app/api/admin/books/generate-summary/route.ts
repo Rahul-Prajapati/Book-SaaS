@@ -89,8 +89,8 @@ export async function POST(request: NextRequest) {
           // GENERATE MAIN SUMMARY FOR THE BOOK
 
           const summaryCompletion = await openRouterAi.chat.completions.create({
-          //  model: "openrouter/free",
-          model: "nex-agi/nex-n2.5-pro:free",
+            model: "openrouter/free",
+          // model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
                 role: "system",
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
           // Generate table of contents
 
           const tocCompletion = await openRouterAi.chat.completions.create({
-            // model: "openrouter/free",
-             model: "nex-agi/nex-n2.5-pro:free",
+             model: "openrouter/free",
+            //  model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
                 role: "system",
@@ -183,8 +183,8 @@ export async function POST(request: NextRequest) {
             try {
               const chapterSummaryCompletion =
                 await openRouterAi.chat.completions.create({
-                  // model: "openrouter/free",
-                   model: "nex-agi/nex-n2.5-pro:free",
+                   model: "openrouter/free",
+                  //  model: "nex-agi/nex-n2.5-pro:free",
                   messages: [
                     {
                       role: "system",

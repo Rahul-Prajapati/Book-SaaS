@@ -25,3 +25,17 @@ declare module "next-auth/jwt" {
         subscriptionTier: SubscriptionTier;     
     }
 }
+
+declare module "@auth/core/adapters" {
+    interface AdapterUser {
+        role: UserRole;
+        subscriptionTier: SubscriptionTier;
+    }
+}
+
+declare module "@auth/prisma-adapter/node_modules/@auth/core/adapters" {
+    interface AdapterUser {
+        role: UserRole;
+        subscriptionTier: SubscriptionTier;
+    }
+}

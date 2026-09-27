@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -33,7 +33,7 @@ interface Category {
   icon: string;
 }
 
-export default function BooksPage() {
+function BooksContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [books, setBooks] = useState<Book[]>([]);
@@ -131,30 +131,28 @@ export default function BooksPage() {
     router.push(`/books?${params}`);
   };
 
-
-  const handleToggleFavorite = async (bookId: number, isFavorited:boolean) => {
+  const handleToggleFavorite = async (bookId: number, isFavorited: boolean) => {
     if (!user) {
-        toast.error("Please log in to add favorites");
-        router.push("/login");
-        return;
+      toast.error("Please log in to add favorites");
+      router.push("/login");
+      return;
     }
 
-try {
-
-    if (isFavorited) {
-        await fetch(`/api/user/favorites/${bookId}`, { method: "DELETE"});
-    } else {
+    try {
+      if (isFavorited) {
+        await fetch(`/api/user/favorites/${bookId}`, { method: "DELETE" });
+      } else {
         await fetch("/api/user/favorites", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ bookId}),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookId }),
         });
+      }
+      fetchBooks();
+    } catch (error) {
+      console.error("Failed to toggle favorites:", error);
     }
-    fetchBooks()        
-} catch (error) {
-    console.error("Failed to toggle favorites:", error);
-  }
-};
+  };
 
   const handleSignOut = async () => {
     try {
@@ -368,14 +366,14 @@ try {
                           <span className="text-6xl">📖</span>
                         </div>
                       )}
-                      
-                      <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleToggleFavorite(book.id, book.isFavorited);
-                      }}
 
-                      className="absolute top-3 right-3 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleToggleFavorite(book.id, book.isFavorited);
+                        }}
+                        className="absolute top-3 right-3 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
+                      >
                         <span className="text-xl">
                           {" "}
                           {book.isFavorited ? "❤️" : "🤍"}{" "}
@@ -470,5 +468,19 @@ try {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BooksPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-xl text-gray-600">Loading...</div>
+        </div>
+      }
+    >
+      <BooksContent />
+    </Suspense>
   );
 }

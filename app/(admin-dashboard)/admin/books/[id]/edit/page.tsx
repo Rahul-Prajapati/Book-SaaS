@@ -157,6 +157,10 @@ export default function EditBookPage() {
         body: JSON.stringify({ bookId: parseInt(bookId) }),
       });
 
+      if(!response.ok){
+        throw new Error("Something went wrong!");
+      }
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -204,8 +208,17 @@ export default function EditBookPage() {
         body: JSON.stringify({ bookId: parseInt(bookId) }),
       });
 
+      if(!response.ok){
+        console.log("Error :");
+        throw new Error("Something went wrong!");
+      }
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response stream received");
+      }
 
       if (reader) {
         while (true) {
@@ -218,7 +231,16 @@ export default function EditBookPage() {
           for (const line of lines) {
             if (line.startsWith("data:")) {
               const data = JSON.parse(line.slice(6));
-              setAudioProgress(data.message);
+              
+              // Error Message
+              if (data.error) {
+                throw new Error(data.error);
+              }
+            
+              // Normal progress message
+              if (data.message) {
+                setAudioProgress(data.message);
+              }
 
               if (data.completed) {
                 setGeneratingAudio(false);
@@ -234,7 +256,12 @@ export default function EditBookPage() {
     } catch (error) {
       setGeneratingAudio(false);
       setAudioProgress("");
-      toast.error("Failed to generate Audio");
+      // toast.error("Failed to generate Audio");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to generate Audio"
+      );
     }
   };
 
