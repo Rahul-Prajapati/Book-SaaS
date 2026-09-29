@@ -91,7 +91,7 @@ function CheckoutContent() {
       // upload payment proof file
       setUploading(true);
       const uploadFormData = new FormData();
-      uploadFormData.append("file", paymentProofFile);
+      uploadFormData.append("file", paymentProofFile,paymentProofFile.name);
       uploadFormData.append("type", "payment_proof");
 
       const uploadResponse = await fetch("/api/admin/upload", {

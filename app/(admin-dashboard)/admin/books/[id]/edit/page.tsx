@@ -131,7 +131,7 @@ export default function EditBookPage() {
         if (data.errors) {
           setErrors(data.errors);
         } else {
-          setErrors({ general: data.error || "Filed to update book" });
+          setErrors({ general: data.error || "Failed to update book" });
         }
         setLoading(false);
         return;

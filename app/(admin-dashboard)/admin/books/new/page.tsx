@@ -116,7 +116,8 @@ export default function AddNewBookPage() {
 
       if (pdfFile) {
         const formData = new FormData();
-        formData.append("file", pdfFile);
+        // formData.append("file", pdfFile);
+        formData.append("file", pdfFile, pdfFile.name);
         formData.append("type", "pdf");
 
         const uploadResponse = await fetch("/api/admin/upload", {

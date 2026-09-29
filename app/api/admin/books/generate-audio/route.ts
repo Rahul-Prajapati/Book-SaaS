@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import cloudinary from "@/lib/cloudinary";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
@@ -51,10 +52,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create upload directory if its does not exist
-    const uploadDir = join(process.cwd(), "public", "uploads", "audio");
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
+    // const uploadDir = join(process.cwd(), "public", "uploads", "audio");
+    // if (!existsSync(uploadDir)) {
+    //   await mkdir(uploadDir, { recursive: true });
+    // }
 
     // Create a readable stream
     const encoder = new TextEncoder();
@@ -88,22 +89,51 @@ export async function POST(request: NextRequest) {
               input: `Chapter ${chapter.chapterNumber}: ${chapter.chapterTitle}. ${chapter.chapterSummary}`,
             });
 
-            // Get the existing audio URL before replacing it
-            const existingChapter = await prisma.bookChapter.findUnique({
-              where: { id: chapter.id },
-            });
-
-            const oldAudioUrl = existingChapter?.audioUrl;
-
-            // Save audio file
             const audioFilename = `${book.id}-chapter-${
               chapter.chapterNumber
-            }-${Date.now()}.mp3`;
-            const audioPath = join(uploadDir, audioFilename);
-            const audioBuffer = Buffer.from(await mp3Response.arrayBuffer());
-            await writeFile(audioPath, audioBuffer);
+            }-${Date.now()}`;
+            
+            const audioBuffer = Buffer.from(
+              await mp3Response.arrayBuffer()
+            );
+            
+            const result = await new Promise<any>((resolve, reject) => {
+              const uploadStream = cloudinary.uploader.upload_stream(
+                {
+                  folder: "book-saas/audio",
+                  resource_type: "video",
+                  public_id: audioFilename,
+                  format: "mp3",
+                },
+                (error, result) => {
+                  if (error) reject(error);
+                  else resolve(result);
+                }
+              );
+            
+              uploadStream.end(audioBuffer);
+            });
+            
+            const audioUrl = result.secure_url;
+            
+            console.log("Audio uploaded to Cloudinary:", audioUrl);
 
-            const audioUrl = `/uploads/audio/${audioFilename}`;
+            // Get the existing audio URL before replacing it
+            // const existingChapter = await prisma.bookChapter.findUnique({
+            //   where: { id: chapter.id },
+            // });
+
+            // const oldAudioUrl = existingChapter?.audioUrl;
+
+            // Save audio file
+            // const audioFilename = `${book.id}-chapter-${
+            //   chapter.chapterNumber
+            // }-${Date.now()}.mp3`;
+            // const audioPath = join(uploadDir, audioFilename);
+            // const audioBuffer = Buffer.from(await mp3Response.arrayBuffer());
+            // await writeFile(audioPath, audioBuffer);
+
+            // const audioUrl = `/uploads/audio/${audioFilename}`;
 
             // Estimate duration (150 Words per minute, average 5 characters per word)
             const estimatedDuration = Math.ceil(
@@ -124,25 +154,27 @@ export async function POST(request: NextRequest) {
             );
 
             // Delete OLD audio file
-            if (oldAudioUrl) {
-              const oldAudioRelativePath = oldAudioUrl.replace(/^\/+/, "");
+            // if (oldAudioUrl) {
+            //   const oldAudioRelativePath = oldAudioUrl.replace(/^\/+/, "");
 
-              const oldAudioPath = join(
-                process.cwd(),
-                "public",
-                oldAudioRelativePath
-              );
+            //   const oldAudioPath = join(
+            //     process.cwd(),
+            //     "public",
+            //     oldAudioRelativePath
+            //   );
 
-              try {
-                await unlink(oldAudioPath);
-                console.log("Deleted old audio:", oldAudioPath);
-              } catch (error: any) {
-                // File may already have been deleted
-                if (error.code !== "ENOENT") {
-                  console.error("Failed to delete old audio:", error);
-                }
-              }
-            }
+            //   try {
+            //     await unlink(oldAudioPath);
+            //     console.log("Deleted old audio:", oldAudioPath);
+            //   } catch (error: any) {
+            //     // File may already have been deleted
+            //     if (error.code !== "ENOENT") {
+            //       console.error("Failed to delete old audio:", error);
+            //     }
+            //   }
+            // }
+
+            // 
           }
 
           // Update book with audio status

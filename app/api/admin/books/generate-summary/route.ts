@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { DOMMatrix as CanvasDOMMatrix } from 'canvas';
+import { DOMMatrix as CanvasDOMMatrix } from "canvas";
 import pdf from "pdf-extraction";
-
 
 const openRouterAi = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -56,15 +55,30 @@ export async function POST(request: NextRequest) {
           if (book.originalPdfUrl) {
             sendMessage("Extracting text from PDF...");
             try {
-             // global.DOMMatrix = DOMMatrix;
+              // global.DOMMatrix = DOMMatrix;
               (global as any).DOMMatrix = CanvasDOMMatrix;
-             
-              const pdfPath = join(
-                process.cwd(),
-                "public",
-                book.originalPdfUrl
-              );
-              const dataBuffer = await readFile(pdfPath);
+
+              // const pdfPath = join(
+              //   process.cwd(),
+              //   "public",
+              //   book.originalPdfUrl
+              // );
+              // const dataBuffer = await readFile(pdfPath);
+
+              console.log("originpdf url :::", book.originalPdfUrl);
+              
+
+              const pdfResponse = await fetch(book.originalPdfUrl);
+
+              console.log("pdfResponse :::", pdfResponse);
+
+              if (!pdfResponse.ok) {
+                throw new Error(
+                  `Failed to download PDF: ${pdfResponse.status} ${pdfResponse.statusText}`
+                );
+              }
+
+              const dataBuffer = Buffer.from(await pdfResponse.arrayBuffer());
               const pdfData = await pdf(dataBuffer);
 
               pdfText = pdfData.text;
@@ -90,7 +104,7 @@ export async function POST(request: NextRequest) {
 
           const summaryCompletion = await openRouterAi.chat.completions.create({
             model: "openrouter/free",
-          // model: "nex-agi/nex-n2.5-pro:free",
+            // model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
                 role: "system",
@@ -125,7 +139,7 @@ export async function POST(request: NextRequest) {
           // Generate table of contents
 
           const tocCompletion = await openRouterAi.chat.completions.create({
-             model: "openrouter/free",
+            model: "openrouter/free",
             //  model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
@@ -183,7 +197,7 @@ export async function POST(request: NextRequest) {
             try {
               const chapterSummaryCompletion =
                 await openRouterAi.chat.completions.create({
-                   model: "openrouter/free",
+                  model: "openrouter/free",
                   //  model: "nex-agi/nex-n2.5-pro:free",
                   messages: [
                     {
@@ -240,7 +254,7 @@ Return ONLY the 120-180 word summary text, nothing else.`,
 
           sendMessage("Saving summary to database...");
 
-          // save to database with upsert to check first if data exist or not 
+          // save to database with upsert to check first if data exist or not
           await prisma.bookSummary.upsert({
             where: { bookId: book.id },
             update: {
@@ -253,7 +267,6 @@ Return ONLY the 120-180 word summary text, nothing else.`,
               tableOfContents: tableOfContents,
             },
           });
-          
 
           // Create chapters with detials in book chapter table
           for (const chapter of chaptersWithSummaries) {
@@ -290,7 +303,6 @@ Return ONLY the 120-180 word summary text, nothing else.`,
       },
     });
 
-  
     return new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
