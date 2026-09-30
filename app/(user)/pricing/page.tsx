@@ -76,7 +76,7 @@ export default function PricingPage() {
       price: "$0",
       period: "forever",
       type: "FREE",
-      description: "Perfect for exploring BookWise",
+      description: "Perfect for exploring BookStore",
       features: [
         "Browse all books catalog",
         "Read book descriptions",
@@ -198,7 +198,7 @@ export default function PricingPage() {
                   <span className="text-white font-bold text-xl">B</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900">
-                  BookWise
+                  BookStore
                 </span>
               </Link>
               <div className="hidden md:flex items-center space-x-6">

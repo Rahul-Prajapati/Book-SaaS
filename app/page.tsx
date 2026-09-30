@@ -1,6 +1,18 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth();
+
+  if (session?.user?.role === "ADMIN") {
+    redirect("/admin/dashboard");
+  }
+
+  if (session?.user) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
@@ -182,9 +194,9 @@ export default function HomePage() {
             <span className="text-2xl font-bold text-white">BookStore</span>
           </div>
           <p className="mb-8 text-lg">
-            Learn from the world's best books in just 15 minutes.
+            Learn from the world&apos;s best books in just 15 minutes.
           </p>
-          <p className="text-sm">&copy; 2024 BookStore. All rights reserved.</p>
+          <p className="text-sm">&copy; 2026 BookStore. All rights reserved.</p>
         </div>
       </footer>
     </div>

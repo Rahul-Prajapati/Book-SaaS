@@ -3,9 +3,9 @@ import cloudinary from "@/lib/cloudinary";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { writeFile, mkdir, unlink } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
+// import { writeFile, mkdir, unlink } from "fs/promises";
+// import { join } from "path";
+// import { existsSync } from "fs";
 
 const openRouterAi = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
             
             const audioUrl = result.secure_url;
             
-            console.log("Audio uploaded to Cloudinary:", audioUrl);
+            // console.log("Audio uploaded to Cloudinary:", audioUrl);
 
             // Get the existing audio URL before replacing it
             // const existingChapter = await prisma.bookChapter.findUnique({

@@ -2,8 +2,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { readFile } from "fs/promises";
-import { join } from "path";
+// import { readFile } from "fs/promises";
+// import { join } from "path";
 import { DOMMatrix as CanvasDOMMatrix } from "canvas";
 import pdf from "pdf-extraction";
 
@@ -65,12 +65,11 @@ export async function POST(request: NextRequest) {
               // );
               // const dataBuffer = await readFile(pdfPath);
 
-              console.log("originpdf url :::", book.originalPdfUrl);
-              
+              // console.log("originpdf url :::", book.originalPdfUrl);
 
               const pdfResponse = await fetch(book.originalPdfUrl);
 
-              console.log("pdfResponse :::", pdfResponse);
+              // console.log("pdfResponse :::", pdfResponse);
 
               if (!pdfResponse.ok) {
                 throw new Error(
@@ -144,8 +143,13 @@ export async function POST(request: NextRequest) {
             messages: [
               {
                 role: "system",
-                content:
-                  "You are creating a table of contents for a book summary. Return ONLY a JSON array.",
+                content: `You are creating a table of contents for a book summary. 
+                  Return ONLY a JSON array.
+                  Do not return markdown.
+                  Do not return code fences.
+                  Do not return explanations.
+                  Do not return safety messages.
+                  `,
               },
               {
                 role: "user",

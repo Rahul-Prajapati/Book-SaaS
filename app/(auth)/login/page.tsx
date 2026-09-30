@@ -34,11 +34,11 @@ function LoginForm() {
         throw new Error("Invalid email or password");
       }
 
-      // Redireact to dashboard after successfully login
-      router.push("/dashboard");
+      // Let the authenticated route resolve the destination from the user's role.
+      router.replace("/");
       router.refresh();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
       setLoading(false);
     }

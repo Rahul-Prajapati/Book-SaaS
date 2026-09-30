@@ -13,10 +13,14 @@ export default auth((req) => {
 
   const isAdminRoute = nextUrl.pathname.startsWith("/admin");
   const isAdminLoginPage = nextUrl.pathname === "/admin/login";
+  const isHomePage = nextUrl.pathname === "/";
 
   const isAuthPage =
     nextUrl.pathname.startsWith("/login") ||
-    nextUrl.pathname.startsWith("/register");
+    nextUrl.pathname.startsWith("/register") ||
+    isAdminLoginPage;
+
+  const dashboardPath = isAdmin ? "/admin/dashboard" : "/dashboard";
 
   // Redirect to login if trying to access that our protected route if this user is not logged in.
   if (isProtectedRoute && !isLoggedIn) {
@@ -25,24 +29,21 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Allow access to admin login page.
+  // Send signed-in users away from public entry points to their own dashboard.
+  if (isLoggedIn && (isHomePage || isAuthPage)) {
+    return NextResponse.redirect(new URL(dashboardPath, nextUrl.origin));
+  }
 
+  // Allow signed-out visitors to reach the admin login page.
   if (isAdminLoginPage) {
-    // If already logged in as admin, redireact to admin dashboard
-    if (isLoggedIn && isAdmin) {
-      return NextResponse.redirect(new URL("admin/dashboard", nextUrl.origin));
-    }
     return NextResponse.next();
   }
 
   /// Redireact to admin login if tryting to access amdin route and not as admin
-  if (isAdminRoute && (!isLoggedIn || !isAdmin)) {
-    return NextResponse.redirect(new URL("/admin/login", nextUrl.origin));
-  }
-
-  // Protect user dashboard
-  if (isAuthPage && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl.origin));
+  if (isAdminRoute && !isAdmin) {
+    return NextResponse.redirect(
+      new URL(isLoggedIn ? "/dashboard" : "/admin/login", nextUrl.origin)
+    );
   }
 
   return NextResponse.next();
