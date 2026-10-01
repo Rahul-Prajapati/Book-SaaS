@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import DeleteBookButton from "./delete-book-button";
 
 export default async function AdminBookPage() {
   const session = await auth();
@@ -190,9 +191,7 @@ export default async function AdminBookPage() {
                       >
                         Edit
                       </Link>
-                      <button className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium">
-                        Delete
-                      </button>
+                      <DeleteBookButton bookId={book.id} title={book.title} />
                     </div>
                   </td>
                 </tr>

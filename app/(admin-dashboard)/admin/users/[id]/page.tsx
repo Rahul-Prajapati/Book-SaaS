@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface User {
   id: string;
@@ -102,7 +102,11 @@ export default function UserDetailsPage() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      const data = await response.clone().json().catch(() => ({}));
+      await toastApiResponse(response, {
+        success: "User updated successfully.",
+        error: "Failed to update user.",
+      });
 
       if (!response.ok) {
         if (data.errors) {
@@ -114,11 +118,11 @@ export default function UserDetailsPage() {
         return;
       }
 
-      toast.success("User updated successfully!");
       setEditing(false);
       fetchUser();
     } catch (error) {
       setErrors({ general: "An error occurred while updating the user" });
+      toastApiFailure(error, "Could not update user.");
       setSaving(false);
     }
   };
@@ -138,18 +142,18 @@ export default function UserDetailsPage() {
         method: "DELETE",
       });
 
-      const data = await response.json();
-
+      await toastApiResponse(response, {
+        success: "User deleted successfully.",
+        error: "Failed to delete user.",
+      });
       if (!response.ok) {
-        toast.error(data.error || "Failed to delete user");
         setDeleting(false);
         return;
       }
 
-      toast.success("User deleted successfully!");
       router.push("/admin/users");
     } catch (error) {
-      toast.error("An error occurred while deleting the user");
+      toastApiFailure(error, "Could not delete user.");
       setDeleting(false);
     }
   };

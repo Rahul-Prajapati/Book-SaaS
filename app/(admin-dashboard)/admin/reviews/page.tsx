@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Review {
   id: number;
@@ -64,14 +64,15 @@ export default function ReviewsPage() {
         },
         body: JSON.stringify({ isApproved: !currentStatus }),
       });
+      await toastApiResponse(response, {
+        success: currentStatus ? "Review hidden successfully." : "Review approved successfully.",
+        error: "Failed to update review.",
+      });
       if (response.ok) {
-        toast.success("Reveiw Updated successfully!");
         fetchReviews();
-      } else {
-        toast.error("Failed to update review");
       }
     } catch (error) {
-      toast.error("An error occurred while updating the review");
+      toastApiFailure(error, "Could not update review.");
     } finally {
       setUpdating(null);
     }
@@ -87,14 +88,15 @@ export default function ReviewsPage() {
       const response = await fetch(`/api/admin/reviews/${reviewId}`, {
         method: "DELETE",
       });
+      await toastApiResponse(response, {
+        success: "Review deleted successfully.",
+        error: "Failed to delete review.",
+      });
       if (response.ok) {
-        toast.success("Reveiw deleted successfully!");
         fetchReviews();
-      } else {
-        toast.error("Failed to deleting review");
       }
     } catch (error) {
-      toast.error("An error occurred while deleting the review");
+      toastApiFailure(error, "Could not delete review.");
     } finally {
       setUpdating(null);
     }

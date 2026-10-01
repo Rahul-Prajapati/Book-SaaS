@@ -41,7 +41,7 @@ const session = await auth();
             }
         });
         return NextResponse.json(
-            {error: "Vlaidation filed", errors},
+            {error: "Validation filed", errors},
             { status: 400}
         );
     }

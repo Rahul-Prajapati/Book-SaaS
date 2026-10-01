@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 type Settings = {
   storeName: string;
@@ -85,6 +86,10 @@ export default function AdminSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       });
+      await toastApiResponse(response, {
+        success: "Settings saved successfully.",
+        error: "Failed to save settings.",
+      });
       const data = (await response.json()) as ApiError & {
         settings?: Settings;
         message?: string;
@@ -100,8 +105,9 @@ export default function AdminSettingsPage() {
         setSettings(data.settings);
       }
       setSuccessMessage(data.message || "Settings saved successfully.");
-    } catch {
+    } catch (error) {
       setSaveError("Unable to reach the server. Check your connection and try again.");
+      toastApiFailure(error, "Unable to reach the server. Check your connection and try again.");
     } finally {
       setSaving(false);
     }

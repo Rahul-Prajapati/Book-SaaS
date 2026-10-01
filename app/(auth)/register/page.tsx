@@ -1,7 +1,9 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,6 +15,13 @@ export default function RegisterPage() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("notice") === "book-access-required") {
+      toast.error("Please register first to access book details.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,16 +37,22 @@ export default function RegisterPage() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      await toastApiResponse(response, {
+        success: "Account created successfully. Please sign in.",
+        error: "Registration failed. Please try again.",
+      });
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || "Registration failed");
+        setError(data.error || "Registration failed");
+        return;
       }
 
       // Redireact to login page after suucessfull register
       router.push("/login?registered=true");
     } catch (err: any) {
       setError(err.message);
+      toastApiFailure(err, "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }

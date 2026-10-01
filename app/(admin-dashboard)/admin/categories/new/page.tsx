@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 export default function NewCategoryPage() {
   const router = useRouter();
@@ -52,7 +52,11 @@ export default function NewCategoryPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.clone().json().catch(() => ({}));
+      await toastApiResponse(response, {
+        success: "Category created successfully.",
+        error: "Failed to create category.",
+      });
 
       if (!response.ok) {
         if (data.errors) {
@@ -63,11 +67,10 @@ export default function NewCategoryPage() {
         setSaving(false);
         return;
       }
-      toast.success("Category created successfully!");
       router.push("/admin/categories");
     } catch (error) {
       setErrors({ general: "An error occurred whiile createing the category" });
-      toast.error("An error occurred while creating the category");
+      toastApiFailure(error, "Could not create category.");
       setSaving(false);
     }
   };

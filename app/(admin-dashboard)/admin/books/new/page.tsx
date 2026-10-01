@@ -2,6 +2,11 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import {
+  toastApiFailure,
+  toastApiResponse,
+  toastApiSuccess,
+} from "@/lib/client/api-toast";
 
 interface Category {
   id: number;
@@ -107,10 +112,17 @@ export default function AddNewBookPage() {
           method: "POST",
           body: formData,
         });
+        await toastApiResponse(uploadResponse, {
+          success: "Cover image uploaded.",
+          error: "Failed to upload cover image.",
+        });
 
         if (uploadResponse.ok) {
           const data = await uploadResponse.json();
           coverImageUrl = data.url;
+        } else {
+          setLoading(false);
+          return;
         }
       }
 
@@ -124,10 +136,17 @@ export default function AddNewBookPage() {
           method: "POST",
           body: formData,
         });
+        await toastApiResponse(uploadResponse, {
+          success: "Book PDF uploaded.",
+          error: "Failed to upload book PDF.",
+        });
 
         if (uploadResponse.ok) {
           const data = await uploadResponse.json();
           pdfUrl = data.url;
+        } else {
+          setLoading(false);
+          return;
         }
       }
 
@@ -155,7 +174,11 @@ export default function AddNewBookPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.clone().json().catch(() => ({}));
+      await toastApiResponse(response, {
+        success: "Book created successfully. You can now generate its summary and audio.",
+        error: "Failed to create book.",
+      });
       if (!response.ok) {
         if (data.errors) {
           setErrors(data.errors);
@@ -169,12 +192,9 @@ export default function AddNewBookPage() {
       setBookId(data.id);
       setLoading(false);
 
-      // Show success messsage
-      toast.success(
-        "Book created successfully! You can now generate summary and audio"
-      );
     } catch (error) {
       setErrors({ general: "Failed to create book" });
+      toastApiFailure(error, "Could not create book.");
       setLoading(false);
     }
   };
@@ -183,6 +203,7 @@ export default function AddNewBookPage() {
   const handleGenerateSummary = async () => {
     if (!bookId) {
       toast.error("Please save the book first before generating summary");
+      return;
     }
 
     setGeneratingSummary(true);
@@ -196,6 +217,13 @@ export default function AddNewBookPage() {
         },
         body: JSON.stringify({ bookId }),
       });
+
+      if (!response.ok) {
+        await toastApiResponse(response, { error: "Failed to generate summary." });
+        setGeneratingSummary(false);
+        setSummaryProgress("");
+        return;
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -213,9 +241,13 @@ export default function AddNewBookPage() {
               const data = JSON.parse(line.slice(6));
               setSummaryProgress(data.message);
 
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
               if (data.completed) {
                 setGeneratingSummary(false);
-                toast.success("Summary generated successfully");
+                toastApiSuccess("Summary generated successfully.");
                 // Refreah book data
                 window.location.reload();
                 break;
@@ -227,7 +259,7 @@ export default function AddNewBookPage() {
     } catch (error) {
       setGeneratingSummary(false);
       setSummaryProgress("");
-      toast.error("Failed to generate summary");
+      toastApiFailure(error, "Failed to generate summary.");
     }
   };
 
@@ -236,6 +268,7 @@ export default function AddNewBookPage() {
   const handleGenerateAudio = async () => {
     if (!bookId) {
       toast.error("Please save the book first before generating summary");
+      return;
     }
 
     setGeneratingAudio(true);
@@ -249,6 +282,12 @@ export default function AddNewBookPage() {
         },
         body: JSON.stringify({ bookId }),
       });
+      if (!response.ok) {
+        await toastApiResponse(response, { error: "Failed to generate audio." });
+        setGeneratingAudio(false);
+        setAudioProgress("");
+        return;
+      }
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -263,11 +302,14 @@ export default function AddNewBookPage() {
           for (const line of lines) {
             if (line.startsWith("data:")) {
               const data = JSON.parse(line.slice(6));
+              if (data.error) {
+                throw new Error(data.error);
+              }
               setAudioProgress(data.message);
 
               if (data.completed) {
                 setGeneratingAudio(false);
-                toast.success("Audio generated successfully");
+                toastApiSuccess("Audio generated successfully.");
                 // Refreah book data
                 window.location.reload();
                 break;
@@ -279,7 +321,7 @@ export default function AddNewBookPage() {
     } catch (error) {
       setGeneratingAudio(false);
       setAudioProgress("");
-      toast.error("Failed to generate Audio");
+      toastApiFailure(error, "Failed to generate audio.");
     }
   };
 

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface SubscriptionOrder {
   id: number;
@@ -73,15 +73,16 @@ export default function SubscriptionPage() {
         }
       );
 
+      await toastApiResponse(response, {
+        success: "Subscription approved and activated successfully.",
+        error: "Failed to approve subscription.",
+      });
+
       if (response.ok) {
-        toast.success("Subscription approved and activated successfully");
         fetchOrders();
-      } else {
-        const data = await response.json();
-        toast.error(data.error || "Failed to approve subscription");
       }
     } catch (error) {
-      toast.error("An error occurred while approving the subscription");
+      toastApiFailure(error, "Could not approve subscription.");
     } finally {
       setProcessing(null);
     }
@@ -109,15 +110,16 @@ export default function SubscriptionPage() {
         }
       );
 
+      await toastApiResponse(response, {
+        success: "Subscription order rejected.",
+        error: "Failed to reject subscription.",
+      });
+
       if (response.ok) {
-        toast.success("Subscription order rejected");
         fetchOrders();
-      } else {
-        const data = await response.json();
-        toast.error(data.error || "Failed to reject subscription");
       }
     } catch (error) {
-      toast.error("An error occurred while rejecting the subscription");
+      toastApiFailure(error, "Could not reject subscription.");
     } finally {
       setProcessing(null);
     }

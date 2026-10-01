@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Category {
   id: number;
@@ -56,18 +56,19 @@ export default function CategoriesPage() {
         method: "DELETE",
       });
 
-      const data = await response.json();
+      await toastApiResponse(response, {
+        success: "Category deleted successfully.",
+        error: "Failed to delete category.",
+      });
 
       if (!response.ok) {
-        toast.error(data.error || "Failed to delete category");
         setDeleting(null);
         return;
       }
 
-      toast.success("Category deleted successfully");
       fetchCategories();
     } catch (error) {
-      toast.error("An error occurred while deleting the category");
+      toastApiFailure(error, "Could not delete category.");
     } finally {
       setDeleting(null);
     }

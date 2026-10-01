@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Favorite {
   id: number;
@@ -81,15 +81,16 @@ export default function FavoritesPage() {
       const response = await fetch(`/api/user/favorites/${bookId}`, {
         method: "DELETE",
       });
+      await toastApiResponse(response, {
+        success: "Removed from favorites.",
+        error: "Could not remove this book from favorites.",
+      });
 
       if (response.ok) {
         setFavorites(favorites.filter((fav) => fav.bookId !== bookId));
-        toast.success("Remvoe from favorites");
-      } else {
-        toast.error("Failed to remove favorites");
       }
     } catch (error) {
-      console.error("Failed to remove favorites", error);
+      toastApiFailure(error, "Could not remove this book from favorites.");
     }
   };
 
@@ -98,11 +99,15 @@ export default function FavoritesPage() {
       const response = await fetch("/api/auth/signout", {
         method: "POST",
       });
+      await toastApiResponse(response, {
+        success: "Signed out successfully.",
+        error: "Could not sign out.",
+      });
       if (response.ok) {
         window.location.href = "/";
       }
     } catch (error) {
-      console.error("Sign out error", error);
+      toastApiFailure(error, "Could not sign out.");
     }
   };
 

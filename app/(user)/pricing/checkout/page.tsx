@@ -2,6 +2,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 function CheckoutContent() {
   const router = useRouter();
@@ -99,8 +100,15 @@ function CheckoutContent() {
         body: uploadFormData,
       });
 
+      await toastApiResponse(uploadResponse, {
+        success: "Payment proof uploaded.",
+        error: "Failed to upload payment proof.",
+      });
+
       if (!uploadResponse.ok) {
-        throw new Error("Failed to upload payment proof");
+        setSubmitting(false);
+        setUploading(false);
+        return;
       }
 
       const uploadData = await uploadResponse.json();
@@ -121,17 +129,18 @@ function CheckoutContent() {
         }),
       });
 
-      const orderData = await orderResponse.json();
+      await toastApiResponse(orderResponse, {
+        success: "Payment submitted successfully. Our team will review your order.",
+        error: "Failed to create order.",
+      });
 
       if (!orderResponse.ok) {
-        throw new Error(orderData.error || "Failed to create order");
+        setSubmitting(false);
+        return;
       }
-      toast.success(
-        "Payment submitted successfully! Our team will review and active your subscriptions"
-      );
       router.push("/dashboard");
     } catch (error) {
-      console.error("Checkout error", error);
+      toastApiFailure(error, "Checkout could not be completed.");
       setSubmitting(false);
       setUploading(false);
     }

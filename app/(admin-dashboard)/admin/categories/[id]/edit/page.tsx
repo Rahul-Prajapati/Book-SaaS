@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Category {
   id: number;
@@ -95,7 +95,11 @@ export default function EditCategoryPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.clone().json().catch(() => ({}));
+      await toastApiResponse(response, {
+        success: "Category updated successfully.",
+        error: "Failed to update category.",
+      });
 
       if (!response.ok) {
         if (data.errors) {
@@ -106,11 +110,10 @@ export default function EditCategoryPage() {
         setSaving(false);
         return;
       }
-      toast.success("Category Updated successfully!");
       router.push("/admin/categories");
     } catch (error) {
       setErrors({ general: "An error occurred while updating the category" });
-      toast.error("An error occurred while creating the category");
+      toastApiFailure(error, "Could not update category.");
       setSaving(false);
     }
   };

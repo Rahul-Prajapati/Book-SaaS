@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Session {
   user: {
@@ -62,11 +63,15 @@ export default function PricingPage() {
       const response = await fetch("/api/auth/signout", {
         method: "POST",
       });
+      await toastApiResponse(response, {
+        success: "Signed out successfully.",
+        error: "Could not sign out.",
+      });
       if (response.ok) {
         window.location.href = "/";
       }
     } catch (error) {
-      console.error("Sign out error", error);
+      toastApiFailure(error, "Could not sign out.");
     }
   };
 

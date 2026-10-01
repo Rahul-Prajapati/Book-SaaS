@@ -2,6 +2,11 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import toast from "react-hot-toast";
+import {
+  toastApiFailure,
+  toastApiResponse,
+  toastApiSuccess,
+} from "@/lib/client/api-toast";
 
 interface Category {
   id: number;
@@ -125,7 +130,11 @@ export default function EditBookPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.clone().json().catch(() => ({}));
+      await toastApiResponse(response, {
+        success: "Book updated successfully.",
+        error: "Failed to update book.",
+      });
 
       if (!response.ok) {
         if (data.errors) {
@@ -136,10 +145,10 @@ export default function EditBookPage() {
         setLoading(false);
         return;
       }
-      toast.success("Book updated successfully");
       router.push("/admin/books");
     } catch (error) {
       setErrors({ general: "An error occurred while updating the book" });
+      toastApiFailure(error, "Could not update book.");
     }
   };
 
@@ -158,7 +167,10 @@ export default function EditBookPage() {
       });
 
       if(!response.ok){
-        throw new Error("Something went wrong!");
+        await toastApiResponse(response, { error: "Failed to generate summary." });
+        setGeneratingSummary(false);
+        setSummaryProgress("");
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -175,11 +187,14 @@ export default function EditBookPage() {
           for (const line of lines) {
             if (line.startsWith("data:")) {
               const data = JSON.parse(line.slice(6));
+              if (data.error) {
+                throw new Error(data.error);
+              }
               setSummaryProgress(data.message);
 
               if (data.completed) {
                 setGeneratingSummary(false);
-                toast.success("Summary generated successfully");
+                toastApiSuccess("Summary generated successfully.");
                 // Refreah book data
                 window.location.reload();
                 break;
@@ -191,7 +206,7 @@ export default function EditBookPage() {
     } catch (error) {
       setGeneratingSummary(false);
       setSummaryProgress("");
-      toast.error("Failed to generate summary");
+      toastApiFailure(error, "Failed to generate summary.");
     }
   };
 
@@ -209,8 +224,10 @@ export default function EditBookPage() {
       });
 
       if(!response.ok){
-        console.log("Error :");
-        throw new Error("Something went wrong!");
+        await toastApiResponse(response, { error: "Failed to generate audio." });
+        setGeneratingAudio(false);
+        setAudioProgress("");
+        return;
       }
 
       const reader = response.body?.getReader();
@@ -244,7 +261,7 @@ export default function EditBookPage() {
 
               if (data.completed) {
                 setGeneratingAudio(false);
-                toast.success("Audio generated successfully");
+                toastApiSuccess("Audio generated successfully.");
                 // Refreah book data
                 window.location.reload();
                 break;
@@ -256,12 +273,7 @@ export default function EditBookPage() {
     } catch (error) {
       setGeneratingAudio(false);
       setAudioProgress("");
-      // toast.error("Failed to generate Audio");
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to generate Audio"
-      );
+      toastApiFailure(error, "Failed to generate audio.");
     }
   };
 

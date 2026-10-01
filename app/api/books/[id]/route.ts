@@ -10,6 +10,16 @@ export async function GET(
     const { id } = await context.params;
     const session = await auth();
 
+    if (
+      !session?.user ||
+      (session.user.role !== "USER" && session.user.role !== "ADMIN")
+    ) {
+      return NextResponse.json(
+        { error: "Please register first to view book details." },
+        { status: 401 }
+      );
+    }
+
     const book = await prisma.book.findFirst({
       where: {
         id: parseInt(id),
@@ -111,5 +121,9 @@ export async function GET(
     });
   } catch (error) {
     console.error("Error Fetching book", error);
+    return NextResponse.json(
+      { error: "Failed to load book details. Please try again." },
+      { status: 500 }
+    );
   }
 }

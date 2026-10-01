@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Book {
   id: number;
@@ -139,18 +140,24 @@ function BooksContent() {
     }
 
     try {
+      let response: Response;
       if (isFavorited) {
-        await fetch(`/api/user/favorites/${bookId}`, { method: "DELETE" });
+        response = await fetch(`/api/user/favorites/${bookId}`, {
+          method: "DELETE",
+        });
       } else {
-        await fetch("/api/user/favorites", {
+        response = await fetch("/api/user/favorites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ bookId }),
         });
       }
-      fetchBooks();
+      await toastApiResponse(response, {
+        success: isFavorited ? "Removed from favorites." : "Added to favorites.",
+      });
+      if (response.ok) await fetchBooks();
     } catch (error) {
-      console.error("Failed to toggle favorites:", error);
+      toastApiFailure(error, "Could not update favorites.");
     }
   };
 
@@ -159,11 +166,15 @@ function BooksContent() {
       const response = await fetch("/api/auth/signout", {
         method: "POST",
       });
+      await toastApiResponse(response, {
+        success: "Signed out successfully.",
+        error: "Could not sign out.",
+      });
       if (response.ok) {
         window.location.href = "/";
       }
     } catch (error) {
-      console.error("Sign out error", error);
+      toastApiFailure(error, "Could not sign out.");
     }
   };
 

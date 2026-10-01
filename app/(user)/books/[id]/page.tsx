@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import toast from "react-hot-toast";
+import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
 interface Book {
   id: number;
@@ -97,9 +98,6 @@ export default function BookDetailsPage({
       }
     } catch (error) {
       console.error("Failed to fetch user", error);
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      toast.error(errorMessage);
-
     }
   }
 
@@ -137,19 +135,23 @@ export default function BookDetailsPage({
 
     try {
       if (book.isFavorited) {
-        await fetch(`/api/user/favorites/${book.id}`, { method: "DELETE" });
+        const response = await fetch(`/api/user/favorites/${book.id}`, {
+          method: "DELETE",
+        });
+        await toastApiResponse(response, { success: "Removed from favorites." });
+        if (!response.ok) return;
       } else {
-        await fetch("/api/user/favorites", {
+        const response = await fetch("/api/user/favorites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ bookId: book.id }),
         });
+        await toastApiResponse(response, { success: "Added to favorites." });
+        if (!response.ok) return;
       }
-      fetchBook();
+      await fetchBook();
     } catch (error) {
-      console.error("Failed to toggle favorites:", error);
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      toast.error(errorMessage);
+      toastApiFailure(error, "Could not update favorites.");
     }
   };
 
@@ -171,7 +173,7 @@ export default function BookDetailsPage({
       setCurrentTime(FREE_AUDIO_LIMIT);
 
       toast(
-        "1 Free users can listen to only 10 seconds. Upgrade to Premium for full access."
+        "Free users can listen to only 10 seconds. Upgrade to Premium for full access."
       );
 
       return;
@@ -234,7 +236,7 @@ export default function BookDetailsPage({
         hasReachedFreeLimitRef.current = true;
 
         toast(
-          " 2 Free users can listen to only 10 seconds. Upgrade to Premium for full access."
+          "Free users can listen to only 10 seconds. Upgrade to Premium for full access."
         );
 
         return;
@@ -326,21 +328,19 @@ export default function BookDetailsPage({
           comment: reviewData.comment.trim(),
         }),
       });
+      await toastApiResponse(response, {
+        success: "Review submitted. It will appear after admin approval.",
+        error: "Failed to submit review.",
+      });
       if (response.ok) {
-        toast.success(
-          "Review Submitted! It will aappear after admin approval."
-        );
         setShowReviewForm(false);
         setReviewData({ rating: 5, comment: "" });
         fetchBook();
       } else {
-        const error = await response.json();
-        toast.error(error.error || "Failed to submit review");
+        return;
       }
     } catch (error) {
-      console.error("Failed to submit review", error);
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      toast.error(errorMessage);
+      toastApiFailure(error, "Failed to submit review.");
     }
   };
 
@@ -349,13 +349,15 @@ export default function BookDetailsPage({
       const response = await fetch("/api/auth/signout", {
         method: "POST",
       });
+      await toastApiResponse(response, {
+        success: "Signed out successfully.",
+        error: "Could not sign out.",
+      });
       if (response.ok) {
         window.location.href = "/";
       }
     } catch (error) {
-      console.error("Sign out error", error);
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      toast.error(errorMessage);
+      toastApiFailure(error, "Could not sign out.");
     }
   };
 
