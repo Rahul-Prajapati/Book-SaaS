@@ -1,14 +1,32 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import toast from "react-hot-toast";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
+  const downloadError = searchParams.get("downloadError");
+  const handledDownloadError = useRef(false);
+
+  useEffect(() => {
+    if (downloadError !== "login_required" || handledDownloadError.current) return;
+
+    handledDownloadError.current = true;
+    toast.error("Please log in to download PDFs.");
+    const query = new URLSearchParams(window.location.search);
+    query.delete("downloadError");
+    const remainingQuery = query.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}${window.location.hash}`
+    );
+  }, [downloadError]);
 
   const [formData, setFormData] = useState({
     email: "",

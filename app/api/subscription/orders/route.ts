@@ -1,11 +1,12 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getPlanChangeError, subscriptionPlanPrices } from "@/lib/subscription-plans";
+import { reconcilePendingStripePayments } from "@/lib/subscription-payments";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const orderSchema = z.object({
   planType: z.enum(["MONTHLY", "YEARLY", "LIFETIME"]),
-  amount: z.number().positive(),
   paymentProofUrl: z.string().min(1),
   transactionReference: z.string().optional(),
   notes: z.string().optional(),
@@ -38,19 +39,27 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validation.data;
+    const existingUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!existingUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    await reconcilePendingStripePayments(existingUser.id);
 
-    // Check if user already has a pending order or not
-    const pendingOrder = await prisma.subscriptionOrder.findFirst({
-      where: {
-        userId: session.user.id,
-        orderStatus: "PENDING",
-      },
-    });
+    const user = await prisma.user.findUnique({ where: { id: existingUser.id } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    if (pendingOrder) {
+    const planError = getPlanChangeError(user.subscriptionTier, user.subscriptionStatus, data.planType);
+    if (planError) return NextResponse.json({ error: planError }, { status: 400 });
+
+    const [pendingOrder, pendingStripe] = await Promise.all([
+      prisma.subscriptionOrder.findFirst({ where: { userId: session.user.id, orderStatus: "PENDING" } }),
+      prisma.paymentTransaction.findFirst({
+        where: { userId: session.user.id, paymentStatus: "PENDING", stripePaymentIntentId: { not: null } },
+      }),
+    ]);
+
+    if (pendingOrder || pendingStripe) {
       return NextResponse.json(
-        { error: "You already have a pending subscription order" },
-        { status: 400 }
+        { error: "You already have a pending subscription payment. Complete or cancel it first." },
+        { status: 409 }
       );
     }
 
@@ -59,7 +68,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         planType: data.planType,
-        amount: data.amount,
+        amount: subscriptionPlanPrices[data.planType].decimal,
         currency: "USD",
         paymentMethod: "BANK_TRANSFER",
         paymentProofUrl: data.paymentProofUrl,

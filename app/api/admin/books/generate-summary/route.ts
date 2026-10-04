@@ -12,6 +12,8 @@ const openRouterAi = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
+const modelName = process.env.LLM_MODEL_NAME!;
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -102,13 +104,15 @@ export async function POST(request: NextRequest) {
           // GENERATE MAIN SUMMARY FOR THE BOOK
 
           const summaryCompletion = await openRouterAi.chat.completions.create({
-            model: "openrouter/free",
+            model: modelName,
+            // model: "openrouter/free",
+            
             // model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
                 role: "system",
                 content:
-                  "You are a professional book summarizer. Create concise, engaging summaries that capture the key insights and main ideas of books.",
+                  "You are a professional book summarizer.You write polished book summaries for readers, Create concise, engaging summaries that capture the key insights and main ideas of books.Never include analysis, planning, drafts, or discussion of the prompt.",
               },
               {
                 role: "user",
@@ -120,7 +124,7 @@ export async function POST(request: NextRequest) {
   Book Content:
   ${pdfText}
   
-  Please provide:
+  Return a reader-facing response only, with these sections:
   1. A main summary (150-200 words) that captures the essence of the book
   2. 5-7 key takeaways (bullet points)
   3. Target audience
@@ -144,11 +148,7 @@ export async function POST(request: NextRequest) {
               {
                 role: "system",
                 content: `You are creating a table of contents for a book summary. 
-                  Return ONLY a JSON array.
-                  Do not return markdown.
-                  Do not return code fences.
-                  Do not return explanations.
-                  Do not return safety messages.
+                  Return ONLY a JSON array. Do not include markdown, code fences, explanations, safety messages or analysis..
                   `,
               },
               {
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
                     {
                       role: "system",
                       content:
-                        "You are a professional book summarizer. Create detailed, engaging, and professional chapter summaries that capture the key insights and actionable takeaways.",
+                        "You are a professional book summarizer. Write polished book summaries for readers, create detailed, engaging, and professional chapter summaries that capture the key insights and actionable takeaways. Output only the requested summary. Never reveal analysis, planning, instructions, drafts, or discussion of the prompt.",
                     },
                     {
                       role: "user",

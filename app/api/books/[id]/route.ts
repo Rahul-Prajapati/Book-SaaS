@@ -86,6 +86,7 @@ export async function GET(
     if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
+    const { originalPdfUrl: _originalPdfUrl, ...bookForReader } = book;
     // Calaculate avarage ratings
 
     const avgRating = await prisma.bookReview.aggregate({
@@ -114,7 +115,7 @@ export async function GET(
     const userSubscriptionTier = session?.user?.subscriptionTier || "FREE";
 
     return NextResponse.json({
-      ...book,
+      ...bookForReader,
       averageRating: avgRating._avg.rating || 0,
       isFavorited,
       userSubscriptionTier,

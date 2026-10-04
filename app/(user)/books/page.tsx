@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -51,6 +51,29 @@ function BooksContent() {
   );
   const [totalPages, setTotalPages] = useState(1);
   const [user, setUser] = useState<any>(null);
+  const handledDownloadError = useRef<string | null>(null);
+
+  useEffect(() => {
+    const downloadError = searchParams.get("downloadError");
+    const message = downloadError === "book_unavailable"
+      ? "This book is no longer available."
+      : downloadError === "download_failed"
+        ? "The PDF could not be downloaded right now. Please try again later."
+        : null;
+    if (!message) return;
+    if (handledDownloadError.current === downloadError) return;
+
+    handledDownloadError.current = downloadError;
+    toast.error(message);
+    const query = new URLSearchParams(window.location.search);
+    query.delete("downloadError");
+    const remainingQuery = query.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}${window.location.hash}`
+    );
+  }, [searchParams]);
 
   useEffect(() => {
     fetchUser();
@@ -210,7 +233,7 @@ function BooksContent() {
                   <span className="text-white font-bold text-xl">B</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900">
-                  BookWise
+                  BookStore
                 </span>
               </Link>
               <div className="hidden md:flex items-center space-x-6">
@@ -366,10 +389,10 @@ function BooksContent() {
                   <Link href={`/books/${book.id}`}>
                     <div className="relative h-64 bg-gray-100">
                       {book.coverImageUrl ? (
-                        <Image
+                        <img
                           src={book.coverImageUrl}
                           alt={book.title}
-                          fill
+                          // fill
                           className="object-cover"
                         />
                       ) : (

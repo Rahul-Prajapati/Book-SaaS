@@ -12,7 +12,6 @@ interface Book {
   author: string;
   description: string;
   coverImageUrl: string;
-  originalPdfUrl: string | null;
   summary: {
     id: number;
     mainSummary: string | null;
@@ -63,6 +62,7 @@ export default function BookDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(
     null
@@ -76,10 +76,34 @@ export default function BookDetailsPage({
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewData, setReviewData] = useState({ rating: 5, comment: "" });
+  const handledDownloadError = useRef<string | null>(null);
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
   }, [params]);
+
+  useEffect(() => {
+    const downloadError = searchParams.get("downloadError");
+    const messages: Record<string, string> = {
+      upgrade_required: "Upgrade your plan to download this PDF.",
+      pdf_unavailable: "This book’s PDF is currently unavailable.",
+      download_failed: "The PDF could not be downloaded right now. Please try again later.",
+    };
+    const message = downloadError ? messages[downloadError] : undefined;
+    if (!message) return;
+    if (handledDownloadError.current === downloadError) return;
+
+    handledDownloadError.current = downloadError;
+    toast.error(message);
+    const query = new URLSearchParams(window.location.search);
+    query.delete("downloadError");
+    const remainingQuery = query.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}${window.location.hash}`
+    );
+  }, [searchParams]);
 
   useEffect(() => {
     if (resolvedParams) {
@@ -128,6 +152,12 @@ export default function BookDetailsPage({
     if (!user) {
       toast.error("Please log in to add favorites");
       router.push("/login");
+      return;
+    }
+
+    if(!isPremiumUser){
+      toast.error("Please upgrade to premium for this action");
+      router.push("/pricing");
       return;
     }
 
@@ -260,7 +290,7 @@ export default function BookDetailsPage({
     if (!isPremiumUser && time > FREE_AUDIO_LIMIT) {
       time = FREE_AUDIO_LIMIT;
 
-      toast(" 3 Free users can listen to only 10 seconds.");
+      toast("Free users can listen to only 10 seconds.");
       return;
     }
 
@@ -287,15 +317,15 @@ export default function BookDetailsPage({
       router.push("/login");
       return;
     }
-    if (user.subscriptionTier === "FREE") {
-      toast.error("Please upgrade to premuum to download PDFS");
+
+    if (!isPremiumUser) {
+      toast.error("Upgrade your plan to download PDFs.");
       router.push("/pricing");
       return;
     }
 
-    if (book?.originalPdfUrl) {
-      window.open(book.originalPdfUrl, "_blank");
-    }
+    if (!book) return;
+    window.location.assign(`/api/books/${book.id}/download`);
   };
 
   const handleSubmitReview = async (e: React.FormEvent) => {

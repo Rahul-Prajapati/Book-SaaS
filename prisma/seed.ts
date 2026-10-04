@@ -4,6 +4,12 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main(){
+    const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim();
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+    if (!adminEmail || !adminPassword) {
+        throw new Error('Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD in .env before running the seed.');
+    }
+
     console.log("Seeding database...");
 
     // Seed Categories 
@@ -24,7 +30,10 @@ async function main(){
 
   for (const category of categories) { 
     await prisma.category.upsert({
-        where: { slug: category.slug},
+        // Existing databases may already contain a category name under a
+        // different slug. Match the unique name so seeding cannot attempt to
+        // create a duplicate category and violate categories_name_key.
+        where: { name: category.name },
         update: {},
         create: category
     });
@@ -37,15 +46,21 @@ async function main(){
 
 
 
-  const adminPassword = await bcrypt.hash('adminstore@12345',10);
+  const adminPasswordHash = await bcrypt.hash(adminPassword,10);
 
   await prisma.user.upsert({
-    where: { email: 'admin@bookstore.com'},
-    update: {},
+    where: { email: adminEmail },
+    update: {
+        passwordHash: adminPasswordHash,
+        role: 'ADMIN',
+        subscriptionTier: 'LIFETIME',
+        subscriptionStatus: 'ACTIVE',
+        emailVerified: true,
+    },
     create: {
-        email: 'admin@bookstore.com',
+        email: adminEmail,
         fullName: 'Admin User',
-        passwordHash: adminPassword,
+        passwordHash: adminPasswordHash,
         role: 'ADMIN',
         subscriptionTier: 'LIFETIME',
         subscriptionStatus: 'ACTIVE',

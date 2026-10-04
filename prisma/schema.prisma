@@ -248,7 +248,7 @@ enum PlanType {
 model PaymentTransaction {
   id                     Int            @id @default(autoincrement())
   userId                 String         @map("user_id")
-  stripePaymentIntentId  String?        @map("stripe_payment_intent_id")
+  stripePaymentIntentId  String?        @unique @map("stripe_payment_intent_id")
   amount                 Decimal        @db.Decimal(10, 2)
   currency               String         @default("USD")
   paymentStatus          PaymentStatus  @map("payment_status")

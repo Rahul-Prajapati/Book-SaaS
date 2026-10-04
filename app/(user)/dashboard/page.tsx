@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import toast from "react-hot-toast";
 
 interface User {
   id: string;
@@ -33,6 +34,10 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchUserData();
     fetchOrders();
+    if (new URLSearchParams(window.location.search).get("subscription") === "updated") {
+      toast.success("Your subscription is active.");
+      window.history.replaceState({}, "", "/dashboard");
+    }
   }, []);
 
   async function fetchUserData() {

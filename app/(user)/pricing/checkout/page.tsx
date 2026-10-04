@@ -1,8 +1,79 @@
 "use client";
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith("pk_test_")
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
+
+function StripePaymentForm({ planType, paymentIntentId, onCancel, onPaymentSubmitted, confirmingPayment, confirmationMessage, onRetryConfirmation }: {
+  planType: string;
+  paymentIntentId: string;
+  onCancel: () => Promise<void>;
+  onPaymentSubmitted: (id: string) => void;
+  confirmingPayment: boolean;
+  confirmationMessage: string | null;
+  onRetryConfirmation: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const [completed, setCompleted] = useState(false);
+
+  async function handleCancel() {
+    setProcessing(true);
+    try {
+      await onCancel();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel payment");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  async function handleStripeSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+    setProcessing(true);
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: `${window.location.origin}/pricing/checkout?plan=${planType}&payment=stripe` },
+      redirect: "if_required",
+    });
+    if (result.error) {
+      toast.error(result.error.message ?? "Payment could not be completed.");
+      setProcessing(false);
+      return;
+    }
+    setCompleted(true);
+    onPaymentSubmitted(result.paymentIntent?.id ?? paymentIntentId);
+  }
+
+  if (completed) {
+    return (
+      <div className="space-y-3 text-gray-800">
+        <p>{confirmingPayment ? "Payment submitted. Waiting for server confirmation…" : confirmationMessage ?? "Payment submitted."}</p>
+        {!confirmingPayment && confirmationMessage && (
+          <button type="button" onClick={onRetryConfirmation} className="text-indigo-700 underline">Check confirmation again</button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleStripeSubmit} className="space-y-5">
+      <PaymentElement />
+      <button type="submit" disabled={!stripe || processing} className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold disabled:opacity-50">
+        {processing ? "Processing payment..." : "Pay with Stripe"}
+      </button>
+      <button type="button" onClick={handleCancel} disabled={processing} className="w-full px-6 py-2 text-gray-600 underline disabled:opacity-50">Cancel payment</button>
+    </form>
+  );
+}
 
 function CheckoutContent() {
   const router = useRouter();
@@ -15,6 +86,16 @@ function CheckoutContent() {
   const [paymentProofPreview, setPaymentProofPreview] = useState<string | null>(
     null
   );
+  const [paymentMethod, setPaymentMethod] = useState<"BANK_TRANSFER" | "STRIPE">(() =>
+    searchParams.get("payment") === "stripe" ? "STRIPE" : "BANK_TRANSFER"
+  );
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
+  const [loadingStripe, setLoadingStripe] = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
+  const returnedFromStripe = searchParams.get("payment") === "stripe";
+  const stripeReturnStatus = searchParams.get("redirect_status");
+  const returnedPaymentIntentId = searchParams.get("payment_intent");
 
   const [formData, setFormData] = useState({
     transactionReference: "",
@@ -37,6 +118,82 @@ function CheckoutContent() {
   const selectedPlan = planType
     ? PlanDetails[planType as keyof typeof PlanDetails]
     : null;
+
+  const verifyStripePayment = useCallback(async (paymentIntentId: string) => {
+    setConfirmingPayment(true);
+    setConfirmationMessage(null);
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const response = await fetch(
+          `/api/subscription/stripe/status?paymentIntentId=${encodeURIComponent(paymentIntentId)}`,
+          { cache: "no-store" }
+        );
+        const data = await response.json();
+        if (response.ok && data.paymentStatus === "SUCCEEDED") {
+          window.location.assign("/dashboard?subscription=updated");
+          return;
+        }
+        if (response.ok && data.paymentStatus === "FAILED") {
+          const message = "Stripe reported that this payment was unsuccessful. You can try again with a new payment method.";
+          setConfirmationMessage(message);
+          toast.error(message);
+          return;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      }
+      const message = "Payment confirmation is taking longer than expected. Check that Stripe webhook forwarding is running, then check again.";
+      setConfirmationMessage(message);
+      toast.error(message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not confirm the payment yet.";
+      setConfirmationMessage(message);
+      toast.error(message);
+    } finally {
+      setConfirmingPayment(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (returnedFromStripe && stripeReturnStatus === "succeeded" && returnedPaymentIntentId) {
+      void verifyStripePayment(returnedPaymentIntentId);
+    } else if (returnedFromStripe && stripeReturnStatus === "failed") {
+      toast.error("Stripe could not complete the payment. Please try again.");
+      setPaymentMethod("BANK_TRANSFER");
+      router.replace(`/pricing/checkout?plan=${encodeURIComponent(planType ?? "")}`);
+    }
+  }, [returnedFromStripe, stripeReturnStatus, returnedPaymentIntentId, verifyStripePayment, router, planType]);
+
+  const cancelStripePayment = async () => {
+    if (!stripeClientSecret) return;
+    const paymentIntentId = stripeClientSecret.split("_secret_")[0];
+    const response = await fetch("/api/subscription/stripe/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentIntentId }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? "Could not cancel payment");
+    toast.success(data.discarded ? "Payment canceled. The unpaid attempt was removed." : "Payment canceled. The failed attempt remains in payment history.");
+    setStripeClientSecret(null);
+    setPaymentMethod("BANK_TRANSFER");
+  };
+
+  useEffect(() => {
+    if (paymentMethod !== "STRIPE" || !planType || stripeClientSecret || returnedFromStripe) return;
+    setLoadingStripe(true);
+    fetch("/api/subscription/stripe/intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planType }),
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Could not start Stripe payment");
+        setStripeClientSecret(data.clientSecret);
+      })
+      .catch((error) => toast.error(error.message ?? "Could not start Stripe payment"))
+      .finally(() => setLoadingStripe(false));
+  }, [paymentMethod, planType, stripeClientSecret, returnedFromStripe]);
 
   useEffect(() => {
     if (!planType || !selectedPlan) {
@@ -81,7 +238,9 @@ function CheckoutContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!paymentProofFile) {
+    if (paymentMethod === "STRIPE") return;
+    const proofFile = paymentProofFile;
+    if (!proofFile) {
       toast.error("Please upload payment proof");
       return;
     }
@@ -92,7 +251,7 @@ function CheckoutContent() {
       // upload payment proof file
       setUploading(true);
       const uploadFormData = new FormData();
-      uploadFormData.append("file", paymentProofFile,paymentProofFile.name);
+      uploadFormData.append("file", proofFile, proofFile.name);
       uploadFormData.append("type", "payment_proof");
 
       const uploadResponse = await fetch("/api/admin/upload", {
@@ -203,7 +362,71 @@ function CheckoutContent() {
 
           {/* Right Column - Payment Form */}
           <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Choose payment method</h2>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button type="button" onClick={() => setPaymentMethod("STRIPE")} className={`flex-1 rounded-lg border p-4 text-left ${paymentMethod === "STRIPE" ? "border-indigo-600 bg-indigo-50" : "border-gray-300"}`}>
+                  <span className="block text-blue-400 font-semibold">Pay by card with Stripe</span>
+                  <span className="text-sm text-gray-600">Secure test payment</span>
+                </button>
+                <button type="button" disabled={returnedFromStripe || confirmingPayment} onClick={async () => {
+                  if (paymentMethod === "STRIPE" && stripeClientSecret) {
+                    try {
+                      await cancelStripePayment();
+                      return;
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not cancel payment");
+                      return;
+                    }
+                  }
+                  setPaymentMethod("BANK_TRANSFER");
+                }} className={`flex-1 rounded-lg border p-4 text-left disabled:opacity-50 ${paymentMethod === "BANK_TRANSFER" ? "border-indigo-600 bg-indigo-50" : "border-gray-300"}`}>
+                  <span className="block text-blue-400 font-semibold">Bank transfer</span>
+                  <span className="text-sm text-gray-600">Upload your receipt for admin review</span>
+                </button>
+              </div>
+            </div>
+
+            {paymentMethod === "STRIPE" ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Pay securely with Stripe</h2>
+                {returnedFromStripe ? (
+                  <div className="space-y-3">
+                    <p className={stripeReturnStatus === "failed" ? "text-red-600" : "text-gray-700"}>
+                      {stripeReturnStatus === "failed"
+                        ? "The Stripe payment was not completed. You can return to pricing and try again."
+                        : confirmingPayment
+                          ? "Payment received by Stripe. Waiting for server confirmation…"
+                          : confirmationMessage ?? "Stripe returned your payment. Subscription activation will follow after server confirmation."}
+                    </p>
+                    {returnedPaymentIntentId && !confirmingPayment && stripeReturnStatus !== "failed" && (
+                      <button type="button" onClick={() => void verifyStripePayment(returnedPaymentIntentId)} className="px-4 py-2 text-indigo-700 underline">Check confirmation again</button>
+                    )}
+                  </div>
+                ) : !stripePromise ? (
+                  <p className="text-red-600">Stripe is not configured. Add the publishable key to enable test payments.</p>
+                ) : loadingStripe ? (
+                  <p className="text-gray-600">Preparing secure payment form...</p>
+                ) : stripeClientSecret ? (
+                  <Elements stripe={stripePromise} options={{
+                    clientSecret: stripeClientSecret,
+                    appearance: { variables: { colorText: "#111827", colorTextSecondary: "#374151" } },
+                  }}>
+                    <StripePaymentForm
+                      planType={planType!}
+                      paymentIntentId={stripeClientSecret.split("_secret_")[0]}
+                      onCancel={cancelStripePayment}
+                      onPaymentSubmitted={(paymentIntentId) => void verifyStripePayment(paymentIntentId)}
+                      confirmingPayment={confirmingPayment}
+                      confirmationMessage={confirmationMessage}
+                      onRetryConfirmation={() => void verifyStripePayment(stripeClientSecret.split("_secret_")[0])}
+                    />
+                  </Elements>
+                ) : (
+                  <p className="text-red-600">Could not initialize Stripe payment. Refresh or choose bank transfer.</p>
+                )}
+              </div>
+            ) : <form onSubmit={handleSubmit} className="space-y-6">
               {/* Bank Details */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">
@@ -212,11 +435,11 @@ function CheckoutContent() {
                 <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg p-6 space-y-3">
                   <div className="flex justify-between">
                     <span className="font-semibold">Bank Name:</span>
-                    <span>BookWise International Bank</span>
+                    <span>BookStore International Bank</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-semibold">Account Name:</span>
-                    <span>BookWise LLC</span>
+                    <span>BookStore LLC</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-semibold">Account Number:</span>
@@ -355,7 +578,7 @@ function CheckoutContent() {
                     : "Submit Payment"}
                 </button>
               </div>
-            </form>
+            </form>}
           </div>
         </div>
       </div>

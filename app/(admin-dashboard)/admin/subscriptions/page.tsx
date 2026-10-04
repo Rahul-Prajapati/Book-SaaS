@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 
@@ -26,32 +26,72 @@ interface SubscriptionOrder {
   };
 }
 
+interface StripePayment {
+  id: number;
+  stripePaymentIntentId: string | null;
+  amount: string;
+  currency: string;
+  paymentStatus: string;
+  planType: string;
+  createdAt: string;
+  user: SubscriptionOrder["user"];
+}
+
+interface SubscriptionCounts {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  stripeSucceeded: number;
+  stripeFailed: number;
+  stripePending: number;
+}
+
 export default function SubscriptionPage() {
   const [orders, setOrders] = useState<SubscriptionOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("PENDING");
   const [processing, setProcessing] = useState<number | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [stripePayments, setStripePayments] = useState<StripePayment[]>([]);
+  const [counts, setCounts] = useState<SubscriptionCounts>({ total: 0, pending: 0, approved: 0, rejected: 0, stripeSucceeded: 0, stripeFailed: 0, stripePending: 0 });
 
-  useEffect(() => {
-    fetchOrders();
-  }, [filter]);
-
-  async function fetchOrders() {
+  const fetchOrders = useCallback(async () => {
     try {
       const response = await fetch(
-        `/api/admin/subscription-orders?status=${filter}`
+        "/api/admin/subscription-orders?status=ALL"
       );
+      const paymentsResponse = await fetch("/api/admin/subscription-payments?status=ALL");
       if (response.ok) {
         const data = await response.json();
-        //console.log("order data", data);
         setOrders(data);
+      }
+      if (paymentsResponse.ok) {
+        const data = await paymentsResponse.json();
+        setStripePayments(data.payments);
+        setCounts(data.counts);
       }
       setLoading(false);
     } catch (error) {
       console.error("Failed to fetch orders:", error);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [filter, fetchOrders]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void fetchOrders();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [fetchOrders]);
 
   async function handleApprove(orderId: number) {
     if (!confirm("Are you sure you want to approve this subscription?")) {
@@ -140,6 +180,19 @@ export default function SubscriptionPage() {
     }
   };
 
+  const visibleOrders = orders.filter((order) =>
+    ["ALL", "STRIPE_SUCCEEDED", "STRIPE_FAILED"].includes(filter)
+      ? filter === "ALL"
+      : order.orderStatus === filter
+  );
+  const visibleStripePayments = stripePayments.filter((payment) =>
+    filter === "STRIPE_SUCCEEDED"
+      ? payment.paymentStatus === "SUCCEEDED"
+      : filter === "STRIPE_FAILED"
+        ? payment.paymentStatus === "FAILED"
+        : filter === "STRIPE_PENDING" && payment.paymentStatus === "PENDING"
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -161,29 +214,30 @@ export default function SubscriptionPage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-4 gap-6">
+      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="text-sm text-gray-600 mb-1">Total Orders</div>
           <div className="text-3xl font-bold text-gray-900">
-            {orders.length}
+            {counts.total}
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="text-sm text-gray-600 mb-1">Pending</div>
           <div className="text-3xl font-bold text-yellow-600">
-            {orders.filter((o) => o.orderStatus === "PENDING").length}
+            {counts.pending}
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="text-sm text-gray-600 mb-1">Approved</div>
           <div className="text-3xl font-bold text-green-600">
-            {orders.filter((o) => o.orderStatus === "APPROVED").length}
+            {counts.approved}
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="text-sm text-gray-600 mb-1">Rejected</div>
           <div className="text-3xl font-bold text-red-600">
-            {orders.filter((o) => o.orderStatus === "REJECTED").length}
+            {counts.rejected}
+
           </div>
         </div>
       </div>
@@ -199,7 +253,7 @@ export default function SubscriptionPage() {
               : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
           } `}
         >
-          All Orders
+          All Manual Orders
         </button>
         <button
           onClick={() => setFilter("PENDING")}
@@ -231,16 +285,50 @@ export default function SubscriptionPage() {
         >
           Rejected
         </button>
+        <button onClick={() => setFilter("STRIPE_SUCCEEDED")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${filter === "STRIPE_SUCCEEDED" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>
+          Stripe Successful ({counts.stripeSucceeded})
+        </button>
+        <button onClick={() => setFilter("STRIPE_FAILED")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${filter === "STRIPE_FAILED" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>
+          Stripe Unsuccessful ({counts.stripeFailed})
+        </button>
+        <button onClick={() => setFilter("STRIPE_PENDING")} className={`px-4 py-2 rounded-lg text-sm font-semibold ${filter === "STRIPE_PENDING" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>
+          Stripe Pending ({counts.stripePending})
+        </button>
       </div>
 
       {/* Orders List */}
       <div className="space-y-4">
-        {orders.length === 0 ? (
+        {filter === "STRIPE_SUCCEEDED" || filter === "STRIPE_FAILED" || filter === "STRIPE_PENDING" ? (
+          visibleStripePayments.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center shadow-sm"><p className="text-gray-500">No Stripe payments found.</p></div>
+          ) : visibleStripePayments.map((payment) => (
+            <div key={payment.id} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-bold text-gray-900">{payment.planType} Plan</h3>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(payment.paymentStatus === "SUCCEEDED" ? "APPROVED" : payment.paymentStatus === "PENDING" ? "PENDING" : "REJECTED")}`}>{payment.paymentStatus}</span>
+                  </div>
+                  <p className="text-indigo-600 font-medium">{payment.user.fullName} ({payment.user.email})</p>
+                  <p className="text-sm text-gray-600 mt-1">Current: {payment.user.subscriptionTier} ({payment.user.subscriptionStatus})</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-gray-900">{payment.currency} ${payment.amount}</p>
+                  <p className="text-sm text-gray-600">{new Date(payment.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="mt-4 bg-gray-50 rounded-lg p-4 text-sm">
+                <div className="font-semibold text-gray-900">Stripe PaymentIntent ID</div>
+                <code className="break-all text-gray-700">{payment.stripePaymentIntentId ?? "Unavailable"}</code>
+              </div>
+            </div>
+          ))
+        ) : visibleOrders.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center shadow-sm">
             <p className="text-gray-500">No subscription orders found.</p>
           </div>
         ) : (
-          orders.map((order) => (
+          visibleOrders.map((order) => (
             <div
               key={order.id}
               className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm"

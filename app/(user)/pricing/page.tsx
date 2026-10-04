@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import { getPlanChangeError } from "@/lib/subscription-plans";
 
 interface Session {
   user: {
@@ -173,17 +174,13 @@ export default function PricingPage() {
       return;
     }
 
-    // Check fi user alrady has thsi plan or better
-    if (
-      session.user.subscriptionTier === planType &&
-      session.user.subscriptionStatus === "ACTIVE"
-    ) {
-      toast.error("You already have this plan active");
-      return;
-    }
-
-    if (session.user.subscriptionTier === "LIFETIME") {
-      toast.error("You already have lifetime access!");
+    const planError = getPlanChangeError(
+      session.user.subscriptionTier,
+      session.user.subscriptionStatus,
+      planType
+    );
+    if (planError) {
+      toast.error(planError);
       return;
     }
 

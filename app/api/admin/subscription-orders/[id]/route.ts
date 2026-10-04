@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getPlanChangeError, getSubscriptionEndDate } from "@/lib/subscription-plans";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -55,37 +56,39 @@ export async function PUT(
 
     if (data.action === "APPROVED") {
       const now = new Date();
-      let endDate = null;
+      const approvalError = await prisma.$transaction(async (tx) => {
+        const currentUser = await tx.user.findUnique({ where: { id: order.userId } });
+        if (!currentUser) return "User not found";
+        const planError = getPlanChangeError(
+          currentUser.subscriptionTier,
+          currentUser.subscriptionStatus,
+          order.planType
+        );
+        if (planError) return planError;
 
-      if (order.planType === "MONTHLY") {
-        endDate = new Date(now);
-        endDate.setMonth(endDate.getMonth() + 1);
-      } else if (order.planType === "YEARLY") {
-        endDate = new Date(now);
-        endDate.setFullYear(endDate.getFullYear() + 1);
-      }
+        const updated = await tx.subscriptionOrder.updateMany({
+          where: { id: order.id, orderStatus: "PENDING" },
+          data: {
+            orderStatus: "APPROVED",
+            approvedBy: session.user.id,
+            approvedAt: now,
+            notes: data.notes || null,
+          },
+        });
+        if (updated.count === 0) return "This order has already been processed";
 
-      /// Update order status
-      await prisma.subscriptionOrder.update({
-        where: { id: parseInt(id) },
-        data: {
-          orderStatus: "APPROVED",
-          approvedBy: session.user.id,
-          approvedAt: now,
-          notes: data.notes || null,
-        },
+        await tx.user.update({
+          where: { id: order.userId },
+          data: {
+            subscriptionTier: order.planType,
+            subscriptionStatus: "ACTIVE",
+            subscriptionStartDate: now,
+            subscriptionEndDate: getSubscriptionEndDate(order.planType, now),
+          },
+        });
+        return null;
       });
-
-      /// Update user table data
-      await prisma.user.update({
-        where: { id: order.userId },
-        data: {
-          subscriptionTier: order.planType,
-          subscriptionStatus: "ACTIVE",
-          subscriptionStartDate: now,
-          subscriptionEndDate: endDate,
-        },
-      });
+      if (approvalError) return NextResponse.json({ error: approvalError }, { status: 409 });
 
       return NextResponse.json({
         message: "Subscription approved and activated successfully",

@@ -2,7 +2,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import DeleteBookButton from "./delete-book-button";
+// import DeleteBookButton fro../../../../components/admin/Delete-book-button-button";
+import DeleteBookButton from "@/components/admin/Delete-book-button";
+
 
 export default async function AdminBookPage() {
   const session = await auth();
@@ -12,7 +14,6 @@ export default async function AdminBookPage() {
   }
 
   // Fetch all books with their categories
-
   const books = await prisma.book.findMany({
     include: {
       category: {
