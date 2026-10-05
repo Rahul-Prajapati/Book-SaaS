@@ -13,6 +13,7 @@ const openRouterAi = new OpenAI({
 });
 
 const modelName = process.env.LLM_VOICE_MODEL_NAME!;
+const llmvoice = process.env.LLM_MODEL_VOICE!;
 
 export async function POST(request: NextRequest) {
   try {
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
               //    model: "openrouter/free",
               model: modelName,
               // model: "fish-audio/s2.1-pro-free:free",
-              voice: "flux-alexis-en",
+              voice: llmvoice,
               response_format: "mp3",
               input: `Chapter ${chapter.chapterNumber}: ${chapter.chapterTitle}. ${chapter.chapterSummary}`,
             });
