@@ -12,6 +12,8 @@ const openRouterAi = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
+const modelName = process.env.LLM_VOICE_MODEL_NAME!;
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
             // Generate sppech using Openai tts
             const mp3Response = await openRouterAi.audio.speech.create({
               //    model: "openrouter/free",
-              model: "deepgram/flux-tts:free",
+              model: modelName,
               // model: "fish-audio/s2.1-pro-free:free",
               voice: "flux-alexis-en",
               response_format: "mp3",

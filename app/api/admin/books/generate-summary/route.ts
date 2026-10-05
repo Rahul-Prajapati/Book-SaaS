@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
           // Generate table of contents
 
           const tocCompletion = await openRouterAi.chat.completions.create({
-            model: "openrouter/free",
+            model: modelName,
             //  model: "nex-agi/nex-n2.5-pro:free",
             messages: [
               {
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
             try {
               const chapterSummaryCompletion =
                 await openRouterAi.chat.completions.create({
-                  model: "openrouter/free",
+                  model: modelName,
                   //  model: "nex-agi/nex-n2.5-pro:free",
                   messages: [
                     {
