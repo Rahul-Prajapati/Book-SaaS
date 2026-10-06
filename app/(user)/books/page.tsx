@@ -52,6 +52,7 @@ function BooksContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [user, setUser] = useState<any>(null);
   const handledDownloadError = useRef<string | null>(null);
+  const isPremiumUser = user?.subscriptionTier !== "FREE";
 
   useEffect(() => {
     const downloadError = searchParams.get("downloadError");
@@ -159,6 +160,12 @@ function BooksContent() {
     if (!user) {
       toast.error("Please log in to add favorites");
       router.push("/login");
+      return;
+    }
+
+    if(!isPremiumUser){
+      toast.error("Please upgrade to premium for this action");
+      router.push("/pricing");
       return;
     }
 

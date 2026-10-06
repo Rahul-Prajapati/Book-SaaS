@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import { trackAudioListenTime } from "@/lib/client/audio-listen-time";
 
 interface Book {
   id: number;
@@ -111,6 +112,13 @@ export default function BookDetailsPage({
       fetchBook();
     }
   }, [resolvedParams]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    return trackAudioListenTime(audio);
+  }, [book, currentChapterIndex]);
 
   async function fetchUser() {
     try {

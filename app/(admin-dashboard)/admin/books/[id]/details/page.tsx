@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { trackAudioListenTime } from "@/lib/client/audio-listen-time";
 
 interface Chapter {
   id: number;
@@ -45,6 +46,14 @@ export default function BookDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [book, setBook] = useState<Book | null>(null);
   const [currentAudio, setCurrentAudio] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    return trackAudioListenTime(audio);
+  }, [currentAudio]);
 
   useEffect(() => {
     async function fetchBook() {
@@ -286,6 +295,7 @@ export default function BookDetailsPage() {
                     {chapter.audioUrl && currentAudio === chapter.id && (
                       <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
                         <audio
+                          ref={audioRef}
                           controls
                           autoPlay
                           className="w-full"

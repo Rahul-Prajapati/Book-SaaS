@@ -80,7 +80,8 @@ export default function DashboardPage() {
   const formatListenTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
+    const sec = Math.floor(seconds % 3600);
+    return `${hours}h ${minutes}m ${sec}s`;
   };
 
   const getTierColor = (tier: string) => {
