@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import { useUserProfile } from "@/components/providers/UserProfileProvider";
 
 interface Favorite {
   id: number;
@@ -34,25 +35,11 @@ export default function FavoritesPage() {
   const router = useRouter();
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const { user } = useUserProfile();
 
   useEffect(() => {
-    fetchUser();
     fetchFavorites();
   }, []);
-
-  async function fetchUser() {
-    try {
-      const response = await fetch("/api/user/profile");
-      if (response.ok) {
-        const data = await response.json();
-        // console.log("user data:", data);
-        setUser(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch user", error);
-    }
-  }
 
   async function fetchFavorites() {
     setLoading(true);

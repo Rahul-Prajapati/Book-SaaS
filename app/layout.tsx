@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SessionProvider from "@/components/providers/SessionProvider";
+import { UserProfileProvider } from "@/components/providers/UserProfileProvider";
 import ToastProvider from "@/components/ToastProvider";
 
 const geistSans = Geist({
@@ -31,8 +32,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <SessionProvider>
-          <ToastProvider />
-          {children}
+          <UserProfileProvider>
+            <ToastProvider />
+            {children}
+          </UserProfileProvider>
         </SessionProvider>
       </body>
     </html>

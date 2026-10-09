@@ -6,6 +6,7 @@ import Image from "next/image";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 import { trackAudioListenTime } from "@/lib/client/audio-listen-time";
+import { useUserProfile } from "@/components/providers/UserProfileProvider";
 
 interface Book {
   id: number;
@@ -70,7 +71,7 @@ export default function BookDetailsPage({
   );
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const { user } = useUserProfile();
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -108,7 +109,6 @@ export default function BookDetailsPage({
 
   useEffect(() => {
     if (resolvedParams) {
-      fetchUser();
       fetchBook();
     }
   }, [resolvedParams]);
@@ -119,19 +119,6 @@ export default function BookDetailsPage({
 
     return trackAudioListenTime(audio);
   }, [book, currentChapterIndex]);
-
-  async function fetchUser() {
-    try {
-      const response = await fetch("/api/user/profile");
-      if (response.ok) {
-        const data = await response.json();
-        //console.log("user data:", data);
-        setUser(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch user", error);
-    }
-  }
 
   async function fetchBook() {
     if (!resolvedParams) return;

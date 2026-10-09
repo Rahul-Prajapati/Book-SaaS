@@ -4,18 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 import toast from "react-hot-toast";
-
-interface User {
-  id: string;
-  email: string;
-  fullName: string;
-  subscriptionTier: string;
-  subscriptionStatus: string;
-  subscriptionStartDate: string | null;
-  subscriptionEndDate: string | null;
-  audioListenTime: number;
-  createdAt: string;
-}
+import { useUserProfile } from "@/components/providers/UserProfileProvider";
 
 interface SubscriptionOrder {
   id: number;
@@ -27,42 +16,16 @@ interface SubscriptionOrder {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { user, isLoading: loading } = useUserProfile();
   const [orders, setOrders] = useState<SubscriptionOrder[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchUserData();
     fetchOrders();
     if (new URLSearchParams(window.location.search).get("subscription") === "updated") {
       toast.success("Your subscription is active.");
       window.history.replaceState({}, "", "/dashboard");
     }
   }, []);
-
-  async function fetchUserData() {
-    try {
-      const response = await fetch("/api/user/profile");
-      if (response.ok) {
-        const data = await response.json();
-        // console.log("User data:", data);
-        setUser(data);
-      } else {
-        const sessionResponse = await fetch("/api/auth/session");
-        if (sessionResponse.ok) {
-          const sessionData = await sessionResponse.json();
-          if (sessionData.user) {
-            setUser(sessionData.user);
-          }
-        }
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error("Failed to fetch user data:", error);
-      setLoading(false);
-    }
-  }
-  // End fetchUserData
 
   async function fetchOrders() {
     try {

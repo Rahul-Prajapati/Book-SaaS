@@ -5,6 +5,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
 import { getPlanChangeError } from "@/lib/subscription-plans";
+import { useUserProfile } from "@/components/providers/UserProfileProvider";
 
 interface Session {
   user: {
@@ -19,8 +20,24 @@ interface Session {
 export default function PricingPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const { user, isLoading: profileLoading } = useUserProfile();
+  const loading = sessionLoading || profileLoading;
+  const currentSession = session
+    ? {
+        ...session,
+        user: {
+          ...session.user,
+          ...(user
+            ? {
+                fullName: user.fullName,
+                subscriptionTier: user.subscriptionTier,
+                subscriptionStatus: user.subscriptionStatus,
+              }
+            : {}),
+        },
+      }
+    : null;
 
   useEffect(() => {
     fetchSession();
@@ -31,31 +48,12 @@ export default function PricingPage() {
       const sessionResponse = await fetch("/api/auth/session");
       if (sessionResponse.ok) {
         const sessionData = await sessionResponse.json();
-        if (sessionData) {
-          const profileResponse = await fetch("/api/user/profile");
-          if (profileResponse.ok) {
-            const userData = await profileResponse.json();
-            console.log("User data", userData);
-            setUser(userData);
-            setSession({
-              ...sessionData,
-              user: {
-                ...sessionData.user,
-                subscriptionTier: userData.subscriptionTier,
-                subscriptionStatus: userData.subscriptionStatus,
-              },
-            });
-          } else {
-            setSession(sessionData);
-          }
-        } else {
-          setSession(sessionData);
-        }
+        setSession(sessionData);
       }
-      setLoading(false);
     } catch (error) {
       console.error("Failed to fetch session:", error);
-      setLoading(false);
+    } finally {
+      setSessionLoading(false);
     }
   }
 
@@ -165,7 +163,7 @@ export default function PricingPage() {
   ];
 
   const handleSelectPlan = (planType: string) => {
-    if (!session) {
+    if (!currentSession) {
       router.push("/login?redirect=/pricing");
       return;
     }
@@ -175,8 +173,8 @@ export default function PricingPage() {
     }
 
     const planError = getPlanChangeError(
-      session.user.subscriptionTier,
-      session.user.subscriptionStatus,
+      currentSession.user.subscriptionTier,
+      currentSession.user.subscriptionStatus,
       planType
     );
     if (planError) {
@@ -274,12 +272,12 @@ export default function PricingPage() {
         </div>
 
         {/* Current Plan Banner */}
-        {session && session.user.subscriptionTier !== "FREE" && (
+        {currentSession && currentSession.user.subscriptionTier !== "FREE" && (
           <div className="mb-12 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 text-white text-center">
             <p className="text-lg">
               Your current plan:{" "}
-              <strong>{session.user.subscriptionTier}</strong> (
-              {session.user.subscriptionStatus})
+              <strong>{currentSession.user.subscriptionTier}</strong> (
+              {currentSession.user.subscriptionStatus})
             </p>
           </div>
         )}
@@ -331,8 +329,8 @@ export default function PricingPage() {
                   onClick={() => handleSelectPlan(plan.type)}
                   disabled={
                     plan.disabled ||
-                    (session?.user.subscriptionTier === plan.type &&
-                      session?.user.subscriptionStatus === "ACTIVE")
+                    (currentSession?.user.subscriptionTier === plan.type &&
+                      currentSession?.user.subscriptionStatus === "ACTIVE")
                   }
                   className={`w-full py-3 rounded-lg font-semibold mb-6 transition-all ${
                     plan.popular
@@ -342,8 +340,8 @@ export default function PricingPage() {
                       : "bg-gray-900 text-white hover:bg-gray-800"
                   } `}
                 >
-                  {session?.user.subscriptionTier === plan.type &&
-                  session?.user.subscriptionStatus === "ACTIVE"
+                  {currentSession?.user.subscriptionTier === plan.type &&
+                  currentSession?.user.subscriptionStatus === "ACTIVE"
                     ? "Current Plan"
                     : plan.buttonText}
                 </button>

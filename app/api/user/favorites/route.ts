@@ -46,30 +46,27 @@ export async function GET(request: NextRequest) {
         },
     });
 
-    // Calculate average rating for each book 
-    const favoritesWithRatings = await Promise.all(
-        favorites.map(async(favorite) => {
-            const avgRating = await prisma.bookReview.aggregate({
-                where: {
-                    bookId: favorite.book.id,
-                    isApproved: true
-                },
-                _avg:{
-                    rating: true,
-                },
-            });
-
-        return {
-            id: favorite.id,
-            bookId: favorite.bookId,
-            createdAt: favorite.createdAt,
-            book: {
-                ...favorite.book,
-                averageRating: avgRating._avg.rating || 0,
-            },
-        };
+    const bookIds = favorites.map((favorite) => favorite.bookId);
+    const ratings = bookIds.length
+      ? await prisma.bookReview.groupBy({
+          by: ["bookId"],
+          where: { bookId: { in: bookIds }, isApproved: true },
+          _avg: { rating: true },
         })
+      : [];
+    const ratingByBookId = new Map(
+      ratings.map((rating) => [rating.bookId, rating._avg.rating ?? 0])
     );
+
+    const favoritesWithRatings = favorites.map((favorite) => ({
+      id: favorite.id,
+      bookId: favorite.bookId,
+      createdAt: favorite.createdAt,
+      book: {
+        ...favorite.book,
+        averageRating: ratingByBookId.get(favorite.bookId) ?? 0,
+      },
+    }));
 
     return NextResponse.json(favoritesWithRatings);
       

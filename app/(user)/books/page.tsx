@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import { useUserProfile } from "@/components/providers/UserProfileProvider";
 
 interface Book {
   id: number;
@@ -43,6 +44,9 @@ function BooksContent() {
   const [searchQuery, setSearchQuery] = useState(
     searchParams.get("search") || ""
   );
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState(
+    searchParams.get("search") || ""
+  );
   const [selectedCategory, setSelectedCategory] = useState(
     searchParams.get("category") || ""
   );
@@ -50,7 +54,8 @@ function BooksContent() {
     parseInt(searchParams.get("page") || "1")
   );
   const [totalPages, setTotalPages] = useState(1);
-  const [user, setUser] = useState<any>(null);
+  const [booksRefreshKey, setBooksRefreshKey] = useState(0);
+  const { user } = useUserProfile();
   const handledDownloadError = useRef<string | null>(null);
   const isPremiumUser = user?.subscriptionTier !== "FREE";
 
@@ -77,26 +82,15 @@ function BooksContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    fetchUser();
-    fetchCategories();
-  }, []);
+    const timeout = window.setTimeout(() => {
+      setAppliedSearchQuery(searchQuery);
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
 
   useEffect(() => {
-    fetchBooks();
-  }, [searchQuery, selectedCategory, currentPage]);
-
-  async function fetchUser() {
-    try {
-      const response = await fetch("/api/user/profile");
-      if (response.ok) {
-        const data = await response.json();
-        // console.log("user data:", data);
-        setUser(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch user", error);
-    }
-  }
+    fetchCategories();
+  }, []);
 
   async function fetchCategories() {
     try {
@@ -111,39 +105,65 @@ function BooksContent() {
     }
   }
 
-  async function fetchBooks() {
-    setLoading(true);
+  useEffect(() => {
+    // Cancel the previous request as soon as the input changes. Wait until the
+    // debounced value catches up before requesting the next search result.
+    if (searchQuery !== appliedSearchQuery) return;
 
-    try {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: "12",
-      });
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      page: currentPage.toString(),
+      limit: "12",
+    });
 
-      if (searchQuery) params.append("search", searchQuery);
-      if (selectedCategory) params.append("category", selectedCategory);
+    if (appliedSearchQuery) params.append("search", appliedSearchQuery);
+    if (selectedCategory) params.append("category", selectedCategory);
 
-      const response = await fetch(`/api/books?${params}`);
-      if (response.ok) {
+    async function fetchBooks() {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/books?${params}`, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (!response.ok) {
+          throw new Error(`Books request failed with status ${response.status}`);
+        }
+
         const data = await response.json();
-        //console.log("book data:", data);
-        setBooks(data.books);
-        setTotalPages(data.pagination.totalPages);
+        if (!controller.signal.aborted) {
+          setBooks(data.books);
+          setTotalPages(data.pagination.totalPages);
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          console.error("Failed to fetch books data", error);
+          toast.error("Could not load books. Please try again.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch books data", error);
-    } finally {
-      setLoading(false);
     }
-  }
+
+    void fetchBooks();
+    return () => controller.abort();
+  }, [
+    searchQuery,
+    appliedSearchQuery,
+    selectedCategory,
+    currentPage,
+    booksRefreshKey,
+  ]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setAppliedSearchQuery(searchQuery);
     setCurrentPage(1);
     updateURL();
   };
 
   const handleCategoryChange = (categoryId: string) => {
+    setAppliedSearchQuery(searchQuery);
     setSelectedCategory(categoryId);
     setCurrentPage(1);
   };
@@ -185,7 +205,7 @@ function BooksContent() {
       await toastApiResponse(response, {
         success: isFavorited ? "Removed from favorites." : "Added to favorites.",
       });
-      if (response.ok) await fetchBooks();
+      if (response.ok) setBooksRefreshKey((key) => key + 1);
     } catch (error) {
       toastApiFailure(error, "Could not update favorites.");
     }

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { toastApiFailure, toastApiResponse } from "@/lib/client/api-toast";
+import { useUserProfile } from "@/components/providers/UserProfileProvider";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -78,6 +79,7 @@ function StripePaymentForm({ planType, paymentIntentId, onCancel, onPaymentSubmi
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refresh: refreshProfile } = useUserProfile({ loadOnMount: false });
   const planType = searchParams.get("plan");
 
   const [uploading, setUploading] = useState(false);
@@ -130,6 +132,7 @@ function CheckoutContent() {
         );
         const data = await response.json();
         if (response.ok && data.paymentStatus === "SUCCEEDED") {
+          await refreshProfile();
           window.location.assign("/dashboard?subscription=updated");
           return;
         }
@@ -151,7 +154,7 @@ function CheckoutContent() {
     } finally {
       setConfirmingPayment(false);
     }
-  }, []);
+  }, [refreshProfile]);
 
   useEffect(() => {
     if (returnedFromStripe && stripeReturnStatus === "succeeded" && returnedPaymentIntentId) {

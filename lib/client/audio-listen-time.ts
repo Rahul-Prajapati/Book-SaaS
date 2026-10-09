@@ -1,3 +1,5 @@
+import { notifyAudioListenTimeUpdated } from "@/lib/client/user-profile-events";
+
 const FLUSH_INTERVAL_MS = 15_000;
 const MAX_INCREMENT_SECONDS = 30;
 
@@ -22,7 +24,11 @@ export function trackAudioListenTime(audio: HTMLAudioElement): () => void {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ seconds }),
         keepalive: true,
-      }).catch(() => {});
+      })
+        .then((response) => {
+          if (response.ok) notifyAudioListenTimeUpdated(seconds);
+        })
+        .catch(() => {});
     }
   };
 

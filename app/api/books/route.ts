@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -12,15 +13,15 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(searchParams.get("limit") || "12");
         const skip = (page - 1) * limit;
 
-        const where: any = {
+        const where: Prisma.BookWhereInput = {
             isPublished: true,
         };
 
         if (search) {
             where.OR = [
-                { title: { contains: search, mode: "insensitive" } },
-                { author: { contains: search, mode: "insensitive" } },
-                { description: { contains: search, mode: "insensitive" } },
+                { title: { contains: search } },
+                { author: { contains: search } },
+                { description: { contains: search } },
             ];            
         }
 
@@ -57,37 +58,32 @@ export async function GET(request: NextRequest) {
         prisma.book.count({ where }),
     ]);
 
-    // Calaculate avarage ratings 
-    const booksWithRatings = await Promise.all(
-        books.map(async(book) => {
-            const avgRating = await prisma.bookReview.aggregate({
-                where: {
-                    bookId: book.id,
-                    isApproved: true,
-                },
-                _avg: {
-                    rating: true,
-                },
-            });
-
-        /// Check if current user has favorited this book
-        let isFavorited = false;
-        if (session?.user) {
-            const favorite = await prisma.userFavorite.findFirst({
-                where: {
-                    userId: session.user.id,
-                    bookId: book.id,
-                },
-            });
-            isFavorited = !!favorite;
-        }
-        return {
-            ...book,
-            averageRating: avgRating._avg.rating || 0,
-            isFavorited,
-        };
-        }) 
+    const bookIds = books.map((book) => book.id);
+    const [ratings, favorites] = await Promise.all([
+        bookIds.length
+            ? prisma.bookReview.groupBy({
+                by: ["bookId"],
+                where: { bookId: { in: bookIds }, isApproved: true },
+                _avg: { rating: true },
+            })
+            : Promise.resolve([]),
+        session?.user && bookIds.length
+            ? prisma.userFavorite.findMany({
+                where: { userId: session.user.id, bookId: { in: bookIds } },
+                select: { bookId: true },
+            })
+            : Promise.resolve([]),
+    ]);
+    const ratingByBookId = new Map(
+        ratings.map((rating) => [rating.bookId, rating._avg.rating ?? 0])
     );
+    const favoritedBookIds = new Set(favorites.map((favorite) => favorite.bookId));
+
+    const booksWithRatings = books.map((book) => ({
+        ...book,
+        averageRating: ratingByBookId.get(book.id) ?? 0,
+        isFavorited: favoritedBookIds.has(book.id),
+    }));
 
     return NextResponse.json({
         books: booksWithRatings,
@@ -95,10 +91,14 @@ export async function GET(request: NextRequest) {
             page,
             limit, 
             totalCount,
-            totalPage: Math.ceil(totalCount / limit),
+            totalPages: Math.ceil(totalCount / limit),
         },
     });
     } catch (error) {
         console.error("Error fetching books", error);
+        return NextResponse.json(
+            { error: "Failed to fetch books" },
+            { status: 500 }
+        );
     }
 }
